@@ -6,13 +6,37 @@
 <style>
 .chat-area { height: calc(100vh - 280px); overflow-y: auto; padding: 24px; }
 @keyframes bounce { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-4px)} }
+
+.sos-fab-wrap {
+  position: fixed;
+  left: 28px;
+  bottom: 28px;
+  z-index: 200;
+  touch-action: none;
+  user-select: none;
+}
+
+.sos-fab-wrap.dragging {
+  cursor: grabbing;
+}
+
+.sos-fab-btn {
+  cursor: grab;
+}
+
+@media (max-width: 1200px) {
+  .sos-fab-wrap {
+    left: 18px;
+    bottom: 96px;
+  }
+}
 </style>
 {% endblock %}
 
 {% block content %}
 <!-- SOS 按钮 -->
-<div style="position:fixed;bottom:28px;right:28px;z-index:200;">
-  <button onclick="document.getElementById('sos-modal').style.display='flex'"
+<div id="sosFab" class="sos-fab-wrap">
+  <button id="sosFabBtn" class="sos-fab-btn" onclick="openSosModal(event)"
     style="width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,#ef4444,#b91c1c);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#fff;box-shadow:0 4px 20px rgba(239,68,68,0.45);transition:transform .2s;"
     onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'">
     <svg width="22" height="22" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
@@ -232,6 +256,95 @@ function clearChat() {
     .then(() => { chatBox.innerHTML = ''; appendMessage('ai', '对话已清空。如果你准备好了，我们可以重新开始。'); loadEmotionStats(); });
 }
 
-(function init() { loadConversationList(); loadEmotionStats(); })();
+function openSosModal(e){
+  if (e) e.stopPropagation();
+  document.getElementById('sos-modal').style.display='flex';
+}
+
+function initDraggableSosFab(){
+  const fab = document.getElementById('sosFab');
+  const btn = document.getElementById('sosFabBtn');
+  if(!fab || !btn) return;
+
+  const MARGIN = 8;
+  let dragging = false;
+  let moved = false;
+  let pointerId = null;
+  let offsetX = 0;
+  let offsetY = 0;
+  let maxX = 0;
+  let maxY = 0;
+
+  const clamp = (v, min, max) => Math.min(Math.max(v, min), max);
+
+  const syncBounds = () => {
+    const rect = fab.getBoundingClientRect();
+    maxX = Math.max(MARGIN, window.innerWidth - rect.width - MARGIN);
+    maxY = Math.max(MARGIN, window.innerHeight - rect.height - MARGIN);
+
+    let left = parseFloat(fab.style.left);
+    let top = parseFloat(fab.style.top);
+
+    if (Number.isNaN(left) || Number.isNaN(top)) {
+      const current = fab.getBoundingClientRect();
+      left = current.left;
+      top = current.top;
+    }
+
+    fab.style.left = clamp(left, MARGIN, maxX) + 'px';
+    fab.style.top = clamp(top, MARGIN, maxY) + 'px';
+    fab.style.right = 'auto';
+    fab.style.bottom = 'auto';
+  };
+
+  syncBounds();
+  window.addEventListener('resize', syncBounds);
+
+  const onPointerDown = (e) => {
+    if (e.button !== undefined && e.button !== 0) return;
+    dragging = true;
+    moved = false;
+    pointerId = e.pointerId;
+    const rect = fab.getBoundingClientRect();
+    offsetX = e.clientX - rect.left;
+    offsetY = e.clientY - rect.top;
+    fab.classList.add('dragging');
+    btn.setPointerCapture(pointerId);
+  };
+
+  const onPointerMove = (e) => {
+    if (!dragging || e.pointerId !== pointerId) return;
+    const nextLeft = clamp(e.clientX - offsetX, MARGIN, maxX);
+    const nextTop = clamp(e.clientY - offsetY, MARGIN, maxY);
+    fab.style.left = nextLeft + 'px';
+    fab.style.top = nextTop + 'px';
+    fab.style.right = 'auto';
+    fab.style.bottom = 'auto';
+    moved = true;
+  };
+
+  const onPointerUp = (e) => {
+    if (!dragging || e.pointerId !== pointerId) return;
+    dragging = false;
+    fab.classList.remove('dragging');
+    try { btn.releasePointerCapture(pointerId); } catch(err) {}
+    pointerId = null;
+    if (moved) e.preventDefault();
+  };
+
+  btn.addEventListener('pointerdown', onPointerDown);
+  btn.addEventListener('pointermove', onPointerMove);
+  btn.addEventListener('pointerup', onPointerUp);
+  btn.addEventListener('pointercancel', onPointerUp);
+  btn.addEventListener('click', (e) => {
+    if (moved) {
+      e.preventDefault();
+      e.stopPropagation();
+      moved = false;
+    }
+  });
+}
+
+(function init() { loadConversationList(); loadEmotionStats(); initDraggableSosFab(); })();
 </script>
 {% endblock %}
