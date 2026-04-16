@@ -1,0 +1,202 @@
+{% extends 'base.html' %}
+{% block title %}心理科普 — 心愈{% endblock %}
+{% block page_title %}心理科普{% endblock %}
+
+{% block content %}
+<div style="padding:32px 28px 60px;">
+
+  <!-- 页头 -->
+  <div class="anim-fade-up" style="margin-bottom:40px;">
+    <div class="section-eyebrow">科学 · 权威 · 易懂</div>
+    <h1 class="heading-lg" style="margin-bottom:10px;">心理健康科普</h1>
+    <p style="font-size:14px;color:var(--text-2);">了解心理知识，关爱身心健康</p>
+  </div>
+
+  <!-- 分类筛选 -->
+  <div class="anim-fade-up delay-1" style="margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+    <div id="filter-btns" style="display:flex;flex-wrap:wrap;gap:10px;">
+      <button onclick="filterArticles('')"       data-cat=""           class="btn btn-sm btn-primary">全部</button>
+      <button onclick="filterArticles('Depression')" data-cat="Depression" class="btn btn-sm btn-ghost">抑郁</button>
+      <button onclick="filterArticles('Anxiety')"    data-cat="Anxiety"    class="btn btn-sm btn-ghost">焦虑</button>
+      <button onclick="filterArticles('Sleep')"      data-cat="Sleep"      class="btn btn-sm btn-ghost">睡眠</button>
+      <button onclick="filterArticles('Pressure')"   data-cat="Pressure"   class="btn btn-sm btn-ghost">压力</button>
+      <button onclick="filterArticles('Social')"     data-cat="Social"     class="btn btn-sm btn-ghost">社交</button>
+      <button onclick="filterArticles('Self')"       data-cat="Self"       class="btn btn-sm btn-ghost">自我成长</button>
+    </div>
+    <button id="refresh-articles-btn" class="btn btn-sm btn-ghost" type="button">换一批</button>
+  </div>
+  <p id="articles-status" style="font-size:13px;color:var(--text-3);margin-bottom:20px;">正在查看：全部 · 点击换一批获取新的科普内容</p>
+
+  <!-- 文章网格 -->
+  <div id="articles-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:20px;transition:opacity .22s ease,transform .22s ease;opacity:1;transform:translateY(0);">
+    <div class="skeleton" style="height:180px;border-radius:var(--r-lg);"></div>
+    <div class="skeleton" style="height:180px;border-radius:var(--r-lg);"></div>
+    <div class="skeleton" style="height:180px;border-radius:var(--r-lg);"></div>
+    <div class="skeleton" style="height:180px;border-radius:var(--r-lg);"></div>
+    <div class="skeleton" style="height:180px;border-radius:var(--r-lg);"></div>
+    <div class="skeleton" style="height:180px;border-radius:var(--r-lg);"></div>
+    <div class="skeleton" style="height:180px;border-radius:var(--r-lg);"></div>
+    <div class="skeleton" style="height:180px;border-radius:var(--r-lg);"></div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+{% if session.get('user_id') %}
+sessionStorage.setItem('user_id', '{{ session.get("user_id") }}');
+{% endif %}
+
+const catNames  = { 'Depression':'抑郁','Anxiety':'焦虑','Sleep':'睡眠','Pressure':'压力','Social':'社交','Self':'自我成长' };
+const catStyle  = { 'Depression':'cat-depression','Anxiety':'cat-anxiety','Sleep':'cat-sleep','Pressure':'cat-pressure','Social':'cat-social','Self':'cat-self' };
+const PAGE_SIZE = 8;
+const RECENT_POOL_SIZE = 12;
+let currentCategory = '';
+let currentArticles = [];
+let recentShownIds = [];
+let isLoading = false;
+
+function animateGridOut() {
+  const g = document.getElementById('articles-grid');
+  g.style.opacity = '0.35';
+  g.style.transform = 'translateY(6px)';
+}
+
+function animateGridIn() {
+  const g = document.getElementById('articles-grid');
+  requestAnimationFrame(() => {
+    g.style.opacity = '1';
+    g.style.transform = 'translateY(0)';
+  });
+}
+
+function showLoadingSkeleton() {
+  const g = document.getElementById('articles-grid');
+  g.innerHTML = Array.from({ length: PAGE_SIZE }).map(() =>
+    '<div class="skeleton" style="height:180px;border-radius:var(--r-lg);"></div>'
+  ).join('');
+}
+
+function updateStatusText(total = null, meta = null) {
+  const status = document.getElementById('articles-status');
+  const label = currentCategory ? (catNames[currentCategory] || '该分类') : '全部';
+
+  if (total === 0) {
+    status.textContent = currentCategory
+      ? '这个分类暂时内容较少，先看看其他相关文章。'
+      : '当前内容已浏览完一轮，点击“换一组”可重新推荐。';
+    return;
+  }
+
+  if (currentCategory && meta && meta.fallback_used) {
+    status.textContent = `正在查看：${label} · 本轮 ${total} 篇 · 已为你补充相关主题内容`;
+    return;
+  }
+
+  status.textContent = `正在查看：${label}${typeof total === 'number' ? ` · 本轮 ${total} 篇` : ''} · 点击换一批获取新的科普内容`;
+}
+
+function setRefreshLoading(loading) {
+  const btn = document.getElementById('refresh-articles-btn');
+  isLoading = loading;
+  btn.disabled = loading;
+  if (!loading) {
+    btn.textContent = '换一批';
+    return;
+  }
+  btn.textContent = currentCategory ? '正在更新该分类内容...' : '正在为你重排本轮科普内容...';
+}
+
+async function loadArticles(options = {}) {
+  if (isLoading) return;
+  const { category = currentCategory, refresh = false } = options;
+
+  currentCategory = category;
+  setRefreshLoading(true);
+  if (refresh) {
+    animateGridOut();
+    showLoadingSkeleton();
+  }
+
+  const shownIds = refresh ? recentShownIds : [];
+  const params = new URLSearchParams();
+  params.set('limit', String(PAGE_SIZE));
+  params.set('shuffle', 'true');
+  params.set('include_meta', 'true');
+  if (category) {
+    params.set('category', category);
+    params.set('fill_others', 'true');
+  }
+  if (shownIds.length) {
+    params.set('exclude_ids', shownIds.join(','));
+  }
+
+  try {
+    const res = await fetch(`/api/articles?${params.toString()}`);
+    const data = await res.json();
+    const articles = Array.isArray(data) ? data : (data.items || []);
+    const meta = Array.isArray(data) ? {} : (data.meta || {});
+    currentArticles = Array.isArray(articles) ? articles : [];
+    const nextIds = currentArticles.map(a => a.id);
+    recentShownIds = [...new Set([...recentShownIds, ...nextIds])].slice(-RECENT_POOL_SIZE);
+    renderArticles(currentArticles);
+    animateGridIn();
+    updateStatusText(currentArticles.length, meta);
+  } catch(e) {
+    document.getElementById('articles-grid').innerHTML =
+      '<div style="color:var(--c-red);text-align:center;padding:60px 0;grid-column:1/-1;">加载失败，请稍后重试</div>';
+    animateGridIn();
+  } finally {
+    setRefreshLoading(false);
+  }
+}
+
+function filterArticles(cat) {
+  currentCategory = cat;
+  currentArticles = [];
+  recentShownIds = [];
+  document.querySelectorAll('[data-cat]').forEach(b => {
+    b.className = (b.dataset.cat === cat) ? 'btn btn-sm btn-primary' : 'btn btn-sm btn-ghost';
+  });
+  loadArticles({ category: cat, refresh: true });
+}
+
+function renderArticles(articles) {
+  const g = document.getElementById('articles-grid');
+  if (!articles.length) {
+    g.innerHTML = `<div style="color:var(--text-3);text-align:center;padding:60px 0;grid-column:1/-1;">
+      ${currentCategory ? '这个分类暂时内容较少，先看看其他相关文章。' : '当前内容已浏览完一轮，点击“换一组”可重新推荐。'}
+    </div>`;
+    return;
+  }
+  g.innerHTML = articles.map((a, i) => `
+    <div onclick="location.href='/article/${a.id}'" class="card glass-card-hoverable anim-fade-up"
+         style="padding:26px;cursor:pointer;animation-delay:${i * 0.06}s;">
+      <span class="badge ${catStyle[a.category] || 'badge-aurora'}" style="margin-bottom:14px;display:inline-flex;">
+        ${catNames[a.category] || '科普'}
+      </span>
+      <h3 style="font-size:15px;font-weight:700;color:var(--text-1);margin-bottom:10px;line-height:1.45;">${a.title}</h3>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+        <span style="font-size:11px;color:var(--text-3);background:rgba(49,87,44,.08);padding:3px 8px;border-radius:999px;">${a.reading_minutes || 4} 分钟</span>
+        <span style="font-size:11px;color:var(--text-3);background:rgba(49,87,44,.08);padding:3px 8px;border-radius:999px;">${a.scene_tag || '日常调节'}</span>
+        <span style="font-size:11px;color:var(--text-3);background:rgba(49,87,44,.08);padding:3px 8px;border-radius:999px;">${a.difficulty || '入门'}</span>
+      </div>
+      <p style="font-size:13px;color:var(--text-2);line-height:1.7;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;">
+        ${a.summary || '点击查看全文'}
+      </p>
+      <div style="margin-top:16px;display:flex;align-items:center;gap:4px;font-size:13px;color:var(--c-primary);font-weight:600;">
+        阅读全文
+        <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+      </div>
+    </div>`).join('');
+}
+
+document.getElementById('refresh-articles-btn').addEventListener('click', () => {
+  loadArticles({ category: currentCategory, refresh: true });
+});
+
+loadArticles({ refresh: true });
+</script>
+{% endblock %}

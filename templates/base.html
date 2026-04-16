@@ -1,0 +1,979 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{% block title %}心愈{% endblock %}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Noto+Sans+SC:wght@300;400;500;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+{% block extra_head %}{% endblock %}
+</head>
+<body>
+
+<!-- Mobile drawer (full-page nav mode) -->
+<div class="mobile-drawer" id="mobileDrawer">
+  <div class="mobile-drawer-overlay" onclick="closeMobileMenu()"></div>
+  <div class="mobile-drawer-panel">
+    <div class="mobile-drawer-brand">
+      <div class="mobile-drawer-mark">HEAL<br>SPACE</div>
+      <div class="mobile-drawer-sub">心愈</div>
+    </div>
+    <a href="/" class="mobile-nav-link {% if request.endpoint=='index' %}active{% endif %}">🏠 首页仪表盘</a>
+    <a href="/detect" class="mobile-nav-link {% if request.endpoint=='detect' %}active{% endif %}">🧭 情绪检测</a>
+    <a href="/soothe" class="mobile-nav-link {% if request.endpoint=='soothe' %}active{% endif %}">💬 AI 陪伴</a>
+    <a href="/articles" class="mobile-nav-link {% if request.endpoint in ['articles','article_detail'] %}active{% endif %}">📖 心理科普</a>
+    <a href="/community" class="mobile-nav-link {% if request.endpoint=='community' %}active{% endif %}">🤝 互助社区</a>
+    <a href="/profile" class="mobile-nav-link {% if request.endpoint in ['profile','history'] %}active{% endif %}">👤 个人中心</a>
+    <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border);">
+      {% if session.get('user_id') %}
+      <div style="display:flex;align-items:center;gap:10px;padding:10px 16px;border-radius:var(--r-md);background:var(--bg);">
+        <img src="https://api.dicebear.com/7.x/avataaars/svg?seed={{ session.username }}" style="width:32px;height:32px;border-radius:50%;border:2px solid var(--border);">
+        <div><p style="font-size:13px;font-weight:60;color:var(--text-1);">{{ session.username }}</p><a href="/logout" style="font-size:12px;color:var(--c-red);">退出登录</a></div>
+      </div>
+      {% else %}
+      <a href="/login" class="btn btn-ghost" style="width:100%;margin-bottom:8px;">登录</a>
+      <a href="/register" class="btn btn-primary" style="width:100%;">注册账号</a>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<!-- App Shell Layout -->
+<div class="app-layout">
+
+  <!-- Sidebar -->
+  <aside class="sidebar" id="appSidebar">
+    <a href="/" class="sidebar-logo">
+      <div class="sidebar-logo-icon">🌿</div>
+      <div>
+        <div class="sidebar-logo-text">HEAL<br>SPACE</div>
+        <div class="sidebar-logo-sub">心愈</div>
+      </div>
+    </a>
+
+    <nav class="sidebar-nav">
+      <div class="sidebar-section-label">主功能</div>
+      <a href="/" class="sidebar-link {% if request.endpoint=='index' %}active{% endif %}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+        仪表盘
+      </a>
+      <a href="/detect" class="sidebar-link {% if request.endpoint=='detect' %}active{% endif %}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+        情绪检测
+      </a>
+      <a href="/soothe" class="sidebar-link {% if request.endpoint=='soothe' %}active{% endif %}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+        AI 情绪陪伴
+      </a>
+      <a href="/report" class="sidebar-link {% if request.endpoint=='report' %}active{% endif %}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+        评估报告
+      </a>
+
+      <div class="sidebar-section-label">资源</div>
+      <a href="/articles" class="sidebar-link {% if request.endpoint in ['articles','article_detail'] %}active{% endif %}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
+        心理科普
+      </a>
+      <a href="/books" class="sidebar-link {% if request.endpoint=='books' %}active{% endif %}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg>
+        书籍推荐
+      </a>
+      <a href="/community" class="sidebar-link {% if request.endpoint=='community' %}active{% endif %}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+        互助社区
+      </a>
+
+      <div class="sidebar-section-label">我的</div>
+      <a href="/profile" class="sidebar-link {% if request.endpoint=='profile' %}active{% endif %}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        个人中心
+      </a>
+      <a href="/history" class="sidebar-link {% if request.endpoint=='history' %}active{% endif %}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        检测档案
+      </a>
+    </nav>
+
+    <div class="sidebar-footer">
+      {% if session.get('user_id') %}
+      <a href="/profile" class="sidebar-user">
+        <div class="sidebar-avatar">
+          <img src="https://api.dicebear.com/7.x/avataaars/svg?seed={{ session.username }}" style="width:100%;height:100%;">
+        </div>
+        <div class="sidebar-user-info">
+          <div class="sidebar-username">{{ session.username }}</div>
+          <div class="sidebar-user-sub">查看个人中心</div>
+        </div>
+      </a>
+      <a href="/logout" style="display:block;margin-top:8px;font-size:12px;color:var(--c-red);padding:6px 10px;border-radius:var(--r-sm);transition:background var(--t-fast);" onmouseover="this.style.background='var(--c-red-bg)'" onmouseout="this.style.background='transparent'">退出登录</a>
+      {% else %}
+      <a href="/login" class="btn btn-primary btn-sm" style="width:100%;margin-bottom:8px;">登录</a>
+      <a href="/register" class="btn btn-ghost btn-sm" style="width:100%;">注册账号</a>
+      {% endif %}
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <div class="main-content">
+    <div class="app-atmosphere" aria-hidden="true">
+      <div class="app-sun app-sun-right"></div>
+      <div class="app-sun app-sun-left"></div>
+      <div class="app-noodle"></div>
+      <span class="app-spark app-spark-1"></span>
+      <span class="app-spark app-spark-2"></span>
+      <span class="app-spark app-spark-3"></span>
+    </div>
+    <!-- Top Nav -->
+    <header class="topnav">
+      <div class="topnav-title-wrap">
+        <div class="topnav-kicker">Heal Space</div>
+        <div class="topnav-title">{% block page_title %}心愈{% endblock %}</div>
+      </div>
+      <div class="topnav-actions">
+        <div class="topnav-search-wrap">
+          <form class="topnav-search" id="global-search-form" autocomplete="off">
+            <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <input id="global-search-input" type="text" placeholder="搜索文章、报告关键词...">
+          </form>
+          <div id="global-search-results" class="topnav-search-results hidden"></div>
+        </div>
+        <button class="topnav-icon-btn" title="通知">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+        </button>
+        <a href="/detect" class="btn btn-primary btn-sm">开始检测</a>
+        {% if session.get('user_id') %}
+        <a href="/profile">
+          <div class="topnav-avatar">
+            <img src="https://api.dicebear.com/7.x/avataaars/svg?seed={{ session.username }}" style="width:100%;height:100%;">
+          </div>
+        </a>
+        {% else %}
+        <a href="/login" class="btn btn-ghost btn-sm">登录</a>
+        {% endif %}
+        <button class="nav-hamburger" id="hamburgerBtn" onclick="toggleMobileMenu()" style="display:none;">
+          <span></span><span></span><span></span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Page Content -->
+    <div class="page-content">
+      {% block content %}{% endblock %}
+    </div>
+
+
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/notifications.js') }}"></script>
+<script src="{{ url_for('static', filename='js/utils.js') }}"></script>
+{% endblock %}
+
+<script>
+function padBeijingNumber(value){
+  return String(value).padStart(2,'0');
+}
+function extractBeijingParts(value){
+  if(value===null||value===undefined||value==='') return null;
+  if(typeof value==='string'){
+    const normalized=value.trim().replace('T',' ').replace('Z','');
+    const match=normalized.match(/^(\d{4})-(\d{2})-(\d{2})(?: (\d{2}):(\d{2})(?::(\d{2}))?)?/);
+    if(match){
+      return {
+        year:Number(match[1]),
+        month:Number(match[2]),
+        day:Number(match[3]),
+        hour:Number(match[4]||0),
+        minute:Number(match[5]||0),
+        second:Number(match[6]||0)
+      };
+    }
+  }
+  const date=new Date(value);
+  if(Number.isNaN(date.getTime())) return null;
+  const parts={};
+  new Intl.DateTimeFormat('zh-CN',{
+    timeZone:'Asia/Shanghai',
+    year:'numeric',
+    month:'2-digit',
+    day:'2-digit',
+    hour:'2-digit',
+    minute:'2-digit',
+    second:'2-digit',
+    hour12:false
+  }).formatToParts(date).forEach(part=>{
+    if(part.type!=='literal') parts[part.type]=Number(part.value);
+  });
+  return {
+    year:parts.year,
+    month:parts.month,
+    day:parts.day,
+    hour:parts.hour||0,
+    minute:parts.minute||0,
+    second:parts.second||0
+  };
+}
+function formatBeijingDate(value){
+  const parts=extractBeijingParts(value);
+  if(!parts) return '--';
+  return `${parts.year}-${padBeijingNumber(parts.month)}-${padBeijingNumber(parts.day)}`;
+}
+function formatBeijingTime(value){
+  const parts=extractBeijingParts(value);
+  if(!parts) return '--:--';
+  return `${padBeijingNumber(parts.hour)}:${padBeijingNumber(parts.minute)}`;
+}
+function formatBeijingDateTime(value){
+  const parts=extractBeijingParts(value);
+  if(!parts) return '--';
+  return `${formatBeijingDate(value)} ${padBeijingNumber(parts.hour)}:${padBeijingNumber(parts.minute)}`;
+}
+function formatBeijingMonthDay(value){
+  const parts=extractBeijingParts(value);
+  if(!parts) return '--';
+  return `${parts.month}/${parts.day}`;
+}
+function toggleMobileMenu(){
+  const d=document.getElementById('mobileDrawer'),b=document.getElementById('hamburgerBtn');
+  const o=d.classList.contains('open');
+  if(o){d.classList.remove('open');b.classList.remove('open');document.body.style.overflow='';}
+  else{d.classList.add('open');b.classList.add('open');document.body.style.overflow='hidden';}
+}
+function closeMobileMenu(){
+  document.getElementById('mobileDrawer').classList.remove('open');
+  const b=document.getElementById('hamburgerBtn');
+  if(b)b.classList.remove('open');
+  document.body.style.overflow='';
+}
+
+(function(){
+  const form=document.getElementById('global-search-form');
+  const input=document.getElementById('global-search-input');
+  const results=document.getElementById('global-search-results');
+  if(!form||!input||!results) return;
+
+  let timer=null;
+  let currentItems=[];
+
+  function hideResults(){
+    results.classList.add('hidden');
+    results.innerHTML='';
+    currentItems=[];
+  }
+
+  function typeLabel(type){
+    if(type==='article') return '心理科普';
+    if(type==='book') return '书籍推荐';
+    if(type==='post') return '互助社区';
+    return '搜索结果';
+  }
+
+  function renderResults(items, keyword){
+    currentItems=items;
+    if(!items.length){
+      results.innerHTML=`<div class="topnav-search-empty">没有找到和“${keyword}”相关的内容</div>`;
+      results.classList.remove('hidden');
+      return;
+    }
+
+    results.innerHTML=items.map((item, idx)=>`
+      <a href="${item.url}" class="topnav-search-item anim-fade-in" data-index="${idx}">
+        <div class="topnav-search-item-type">${typeLabel(item.type)}</div>
+        <div class="topnav-search-item-main">
+          <div class="topnav-search-item-title">${item.title}</div>
+          <div class="topnav-search-item-sub">${item.subtitle||''}</div>
+        </div>
+      </a>`).join('');
+    results.classList.remove('hidden');
+  }
+
+  async function performSearch(keyword){
+    const q=keyword.trim();
+    if(!q){hideResults();return;}
+    try{
+      const res=await fetch(`/api/search?q=${encodeURIComponent(q)}`);
+      const data=await res.json();
+      renderResults(Array.isArray(data.items)?data.items:[], q);
+    }catch(_e){
+      results.innerHTML='<div class="topnav-search-empty">搜索暂时不可用，请稍后再试</div>';
+      results.classList.remove('hidden');
+    }
+  }
+
+  input.addEventListener('input', ()=>{
+    clearTimeout(timer);
+    timer=setTimeout(()=>performSearch(input.value), 180);
+  });
+
+  form.addEventListener('submit', (e)=>{
+    e.preventDefault();
+    if(currentItems.length){
+      window.location.href=currentItems[0].url;
+      return;
+    }
+    performSearch(input.value);
+  });
+
+  document.addEventListener('click', (e)=>{
+    if(!e.target.closest('.topnav-search-wrap')) hideResults();
+  });
+
+  input.addEventListener('focus', ()=>{
+    if(results.innerHTML.trim()) results.classList.remove('hidden');
+  });
+})();
+// Responsive: show hamburger on mobile
+(function(){
+  const btn=document.getElementById('hamburgerBtn');
+  if(!btn)return;
+  function check(){btn.style.display=window.innerWidth<769?'flex':'none';}
+  check(); window.addEventListener('resize',check);
+})();
+</script>
+
+<!-- ====================== Dify AI 聊天机器人 已嵌入 ====================== -->
+<script>
+ window.difyChatbotConfig = {
+  token: 't6hrkiaSJUSFLsUJ',
+  inputs: {
+  },
+  systemVariables: {
+  },
+  userVariables: {
+  },
+ }
+</script>
+<script
+ src="https://udify.app/embed.min.js"
+ id="t6hrkiaSJUSFLsUJ"
+ defer>
+</script>
+<style>
+  :root {
+    --heal-deep: #173118;
+    --heal-brand: #31572c;
+    --heal-soft: #4f772d;
+    --heal-bg: #f4f7e7;
+    --heal-accent: #90a955;
+    --heal-text: #2f4a35;
+    --heal-text-soft: #58704d;
+    --heal-line: rgba(79, 119, 45, 0.14);
+    --heal-line-strong: rgba(79, 119, 45, 0.24);
+    --heal-shadow: rgba(49, 87, 44, 0.12);
+    --heal-shadow-deep: rgba(20, 36, 17, 0.22);
+    --heal-user-grad: linear-gradient(135deg, #31572c 0%, #4f772d 100%);
+    --heal-header-grad: linear-gradient(135deg, #173118 0%, #31572c 46%, #4f772d 78%, #90a955 100%);
+    --heal-card-grad: linear-gradient(180deg, rgba(255,253,245,.98) 0%, rgba(244,247,231,.96) 100%);
+    --heal-input-bg: rgba(255,255,255,.9);
+    --heal-focus: 0 0 0 4px rgba(49,87,44,.10);
+    --heal-radius-xl: 30px;
+    --heal-ease: cubic-bezier(.22,1,.36,1);
+  }
+
+  @keyframes healBubbleBreath {
+    0%, 100% { transform: translateY(0) scale(1); }
+    50% { transform: translateY(-4px) scale(1.03); }
+  }
+
+  @keyframes healBubbleHalo {
+    0%, 100% { opacity: .58; transform: scale(.96); }
+    50% { opacity: 1; transform: scale(1.08); }
+  }
+
+  @keyframes healWindowIn {
+    0% { opacity: 0; transform: translateY(18px) scale(.94); }
+    100% { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  @keyframes healSoftShimmer {
+    0% { background-position: 0% 50%; }
+    100% { background-position: 100% 50%; }
+  }
+
+  #dify-chatbot-bubble-button {
+    width: 72px !important;
+    height: 72px !important;
+    border-radius: 26px !important;
+    position: fixed !important;
+    overflow: visible !important;
+    border: 1px solid rgba(255,255,255,.18) !important;
+    background: var(--heal-header-grad) !important;
+    background-size: 180% 180% !important;
+    box-shadow: 0 24px 44px rgba(46,84,38,.24), 0 10px 20px rgba(49,87,44,.14), 0 0 0 1px rgba(255,255,255,.22) inset !important;
+    backdrop-filter: blur(12px) saturate(120%) !important;
+    transition: transform .26s var(--heal-ease), box-shadow .26s var(--heal-ease), border-radius .26s ease, filter .26s ease !important;
+    animation: healBubbleBreath 5s ease-in-out infinite, healSoftShimmer 8s linear infinite alternate !important;
+  }
+
+  #dify-chatbot-bubble-button:hover {
+    transform: translateY(-5px) scale(1.05) !important;
+    box-shadow: 0 30px 56px rgba(46,84,38,.28), 0 14px 28px rgba(49,87,44,.18), 0 0 0 1px rgba(255,255,255,.28) inset !important;
+    filter: saturate(108%) !important;
+    animation-play-state: paused !important;
+  }
+
+  #dify-chatbot-bubble-button::before {
+    content: '' !important;
+    position: absolute !important;
+    inset: -14px !important;
+    border-radius: 34px !important;
+    background: radial-gradient(circle, rgba(236,243,158,.46) 0%, rgba(236,243,158,.16) 40%, rgba(236,243,158,0) 72%) !important;
+    filter: blur(6px) !important;
+    z-index: -2 !important;
+    pointer-events: none !important;
+    animation: healBubbleHalo 3.8s ease-in-out infinite !important;
+  }
+
+  #dify-chatbot-bubble-button::after {
+    content: '' !important;
+    position: absolute !important;
+    inset: 1px !important;
+    border-radius: 25px !important;
+    background: linear-gradient(180deg, rgba(255,255,255,.24), rgba(255,255,255,0) 34%) !important;
+    pointer-events: none !important;
+  }
+
+  #dify-chatbot-bubble-button svg,
+  #dify-chatbot-bubble-button img {
+    transform: scale(1.08) !important;
+    filter: drop-shadow(0 4px 10px rgba(0,0,0,.14)) !important;
+  }
+
+  #dify-chatbot-bubble-window {
+    width: min(27rem, 92vw) !important;
+    height: min(43rem, 80vh) !important;
+    position: fixed !important;
+    overflow: hidden !important;
+    border-radius: var(--heal-radius-xl) !important;
+    border: 1px solid var(--heal-line) !important;
+    background: var(--heal-card-grad) !important;
+    box-shadow: 0 36px 68px var(--heal-shadow-deep), 0 10px 24px var(--heal-shadow), 0 0 0 1px rgba(255,255,255,.28) inset !important;
+    backdrop-filter: blur(18px) saturate(120%) !important;
+    transform-origin: bottom right !important;
+    isolation: isolate !important;
+  }
+
+  #dify-chatbot-bubble-window.dify-window-open {
+    animation: healWindowIn .34s var(--heal-ease) both !important;
+  }
+
+  #dify-chatbot-bubble-window > * {
+    background: transparent !important;
+  }
+
+  #dify-chatbot-bubble-window::before {
+    content: '' !important;
+    position: absolute !important;
+    left: 18px !important;
+    right: 18px !important;
+    top: 14px !important;
+    height: 48px !important;
+    border-radius: 18px !important;
+    background: linear-gradient(180deg, rgba(255,255,255,.22), rgba(255,255,255,0)) !important;
+    pointer-events: none !important;
+    z-index: 2 !important;
+  }
+
+  #dify-chatbot-bubble-window::after {
+    content: 'HEAL SPACE · 心愈助手' !important;
+    position: absolute !important;
+    top: 16px !important;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+    padding: 6px 14px !important;
+    border-radius: 999px !important;
+    background: rgba(255,255,255,.72) !important;
+    border: 1px solid rgba(79,119,45,.12) !important;
+    box-shadow: 0 8px 18px rgba(49,87,44,.08) !important;
+    color: rgba(49,87,44,.72) !important;
+    font-size: 11px !important;
+    font-weight: 800 !important;
+    letter-spacing: .08em !important;
+    pointer-events: none !important;
+    z-index: 3 !important;
+  }
+
+  #dify-chatbot-bubble-window.drag-handle-active::after {
+    background: rgba(236,243,158,.88) !important;
+    color: var(--heal-deep) !important;
+  }
+
+  #dify-chatbot-bubble-window a {
+    color: var(--heal-brand) !important;
+    text-decoration-color: rgba(49,87,44,.34) !important;
+    text-underline-offset: 2px !important;
+  }
+
+  #dify-chatbot-bubble-window a:hover {
+    color: var(--heal-deep) !important;
+  }
+
+  #dify-chatbot-bubble-window svg,
+  #dify-chatbot-bubble-window path,
+  #dify-chatbot-bubble-window [stroke],
+  #dify-chatbot-bubble-window [fill='#1C64F2'],
+  #dify-chatbot-bubble-window [fill='#3B82F6'] {
+    color: inherit !important;
+  }
+
+  #dify-chatbot-bubble-window [style*='#1C64F2'],
+  #dify-chatbot-bubble-window [style*='#3B82F6'],
+  #dify-chatbot-bubble-window [style*='rgb(28, 100, 242)'],
+  #dify-chatbot-bubble-window [style*='rgb(59, 130, 246)'],
+  #dify-chatbot-bubble-window [class*='primary'],
+  #dify-chatbot-bubble-window [class*='Primary'],
+  #dify-chatbot-bubble-window [class*='accent'],
+  #dify-chatbot-bubble-window [class*='Accent'],
+  #dify-chatbot-bubble-window [class*='highlight'],
+  #dify-chatbot-bubble-window [class*='Highlight'] {
+    color: var(--heal-brand) !important;
+    border-color: rgba(79,119,45,.18) !important;
+  }
+  #dify-chatbot-bubble-window [class*='badge'],
+  #dify-chatbot-bubble-window [class*='tag'],
+  #dify-chatbot-bubble-window [class*='Tag'],
+  #dify-chatbot-bubble-window [class*='chip'],
+  #dify-chatbot-bubble-window [class*='Chip'] {
+    background: rgba(244,247,231,.96) !important;
+    color: var(--heal-brand) !important;
+    border: 1px solid var(--heal-line) !important;
+    border-radius: 999px !important;
+    box-shadow: 0 4px 10px rgba(49,87,44,.04) !important;
+  }
+
+  #dify-chatbot-bubble-window [class*='typing'],
+  #dify-chatbot-bubble-window [class*='Typing'],
+  #dify-chatbot-bubble-window [class*='loading'],
+  #dify-chatbot-bubble-window [class*='Loading'],
+  #dify-chatbot-bubble-window [class*='status'],
+  #dify-chatbot-bubble-window [class*='Status'] {
+    color: var(--heal-text-soft) !important;
+  }
+
+  #dify-chatbot-bubble-window [class*='powered'],
+  #dify-chatbot-bubble-window [class*='Powered'],
+  #dify-chatbot-bubble-window [class*='branding'],
+  #dify-chatbot-bubble-window [class*='Branding'] {
+    opacity: .58 !important;
+    color: #6b7f5b !important;
+    filter: saturate(.86) !important;
+    transition: opacity .18s ease !important;
+  }
+
+  #dify-chatbot-bubble-window [class*='powered']:hover,
+  #dify-chatbot-bubble-window [class*='Powered']:hover {
+    opacity: .78 !important;
+  }
+
+  #dify-chatbot-bubble-window [class*='powered'] a,
+  #dify-chatbot-bubble-window [class*='Powered'] a {
+    color: var(--heal-brand) !important;
+    font-weight: 700 !important;
+  }
+
+  #dify-chatbot-bubble-window header,
+  #dify-chatbot-bubble-window [class*='header'],
+  #dify-chatbot-bubble-window [class*='Header'],
+  #dify-chatbot-bubble-window [class*='navbar'],
+  #dify-chatbot-bubble-window [class*='Navbar'] {
+    background: var(--heal-header-grad) !important;
+    background-size: 180% 180% !important;
+    color: #fffdf5 !important;
+    border-bottom: 1px solid rgba(255,255,255,.12) !important;
+    box-shadow: inset 0 -1px 0 rgba(255,255,255,.08), 0 10px 18px rgba(20,36,17,.08) !important;
+    animation: healSoftShimmer 10s linear infinite alternate !important;
+  }
+
+  #dify-chatbot-bubble-window header *,
+  #dify-chatbot-bubble-window [class*='header'] *,
+  #dify-chatbot-bubble-window [class*='Header'] *,
+  #dify-chatbot-bubble-window [class*='navbar'] *,
+  #dify-chatbot-bubble-window [class*='Navbar'] * {
+    color: #fffdf5 !important;
+    fill: currentColor !important;
+    stroke: currentColor !important;
+  }
+
+  #dify-chatbot-bubble-window main,
+  #dify-chatbot-bubble-window section,
+  #dify-chatbot-bubble-window [class*='body'],
+  #dify-chatbot-bubble-window [class*='Body'],
+  #dify-chatbot-bubble-window [class*='messages'],
+  #dify-chatbot-bubble-window [class*='Messages'],
+  #dify-chatbot-bubble-window [class*='message-list'],
+  #dify-chatbot-bubble-window [class*='MessageList'],
+  #dify-chatbot-bubble-window [class*='conversation'],
+  #dify-chatbot-bubble-window [class*='Conversation'],
+  #dify-chatbot-bubble-window [class*='chat'],
+  #dify-chatbot-bubble-window [class*='Chat'] {
+    background: radial-gradient(circle at top right, rgba(236,243,158,.24), transparent 30%), linear-gradient(180deg, rgba(252,255,252,.94) 0%, rgba(247,252,248,.98) 100%) !important;
+  }
+
+  #dify-chatbot-bubble-window article,
+  #dify-chatbot-bubble-window [class*='message'],
+  #dify-chatbot-bubble-window [class*='Message'],
+  #dify-chatbot-bubble-window [class*='item'],
+  #dify-chatbot-bubble-window [class*='Item'] {
+    border-radius: 20px !important;
+  }
+
+  #dify-chatbot-bubble-window [class*='bot'],
+  #dify-chatbot-bubble-window [class*='assistant'],
+  #dify-chatbot-bubble-window [class*='answer'],
+  #dify-chatbot-bubble-window [class*='Answer'],
+  #dify-chatbot-bubble-window [class*='response'],
+  #dify-chatbot-bubble-window [class*='Response'] {
+    background: linear-gradient(180deg, rgba(255,255,255,.9), rgba(248,252,246,.96)) !important;
+    color: var(--heal-text) !important;
+    border: 1px solid rgba(95,150,83,.14) !important;
+    box-shadow: 0 10px 22px rgba(49,87,44,.06), 0 1px 0 rgba(255,255,255,.58) inset !important;
+  }
+
+  #dify-chatbot-bubble-window [class*='user'],
+  #dify-chatbot-bubble-window [class*='query'],
+  #dify-chatbot-bubble-window [class*='question'],
+  #dify-chatbot-bubble-window [class*='Question'] {
+    background: var(--heal-user-grad) !important;
+    color: #fff !important;
+    border: none !important;
+    box-shadow: 0 14px 28px rgba(49,87,44,.14) !important;
+  }
+
+  #dify-chatbot-bubble-window [class*='user'] *,
+  #dify-chatbot-bubble-window [class*='query'] *,
+  #dify-chatbot-bubble-window [class*='question'] * {
+    color: #fff !important;
+  }
+
+  #dify-chatbot-bubble-window footer,
+  #dify-chatbot-bubble-window [class*='footer'],
+  #dify-chatbot-bubble-window [class*='Footer'],
+  #dify-chatbot-bubble-window form,
+  #dify-chatbot-bubble-window [class*='input'],
+  #dify-chatbot-bubble-window [class*='Input'] {
+    background: rgba(255,255,255,.72) !important;
+    border-top: 1px solid rgba(75,129,60,.12) !important;
+    backdrop-filter: blur(12px) !important;
+  }
+
+  #dify-chatbot-bubble-window textarea,
+  #dify-chatbot-bubble-window input,
+  #dify-chatbot-bubble-window [contenteditable='true'] {
+    min-height: 46px !important;
+    background: var(--heal-input-bg) !important;
+    color: var(--heal-deep) !important;
+    border: 1px solid rgba(95,157,73,.22) !important;
+    border-radius: 18px !important;
+    padding: 12px 16px !important;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.62), 0 8px 18px rgba(49,87,44,.05) !important;
+    transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease !important;
+  }
+
+  #dify-chatbot-bubble-window textarea::placeholder,
+  #dify-chatbot-bubble-window input::placeholder {
+    color: #7d9470 !important;
+  }
+
+  #dify-chatbot-bubble-window textarea:focus,
+  #dify-chatbot-bubble-window input:focus,
+  #dify-chatbot-bubble-window [contenteditable='true']:focus {
+    outline: none !important;
+    border-color: rgba(49,87,44,.42) !important;
+    box-shadow: var(--heal-focus), 0 10px 22px rgba(49,87,44,.06) !important;
+    transform: translateY(-1px) !important;
+  }
+
+  #dify-chatbot-bubble-window button,
+  #dify-chatbot-bubble-window [role='button'] {
+    border-radius: 16px !important;
+    transition: transform .18s ease, box-shadow .18s ease, background-color .18s ease, border-color .18s ease !important;
+  }
+
+  #dify-chatbot-bubble-window button[type='submit'],
+  #dify-chatbot-bubble-window [class*='send'],
+  #dify-chatbot-bubble-window [class*='Send'],
+  #dify-chatbot-bubble-window [class*='primaryButton'],
+  #dify-chatbot-bubble-window [class*='PrimaryButton'],
+  #dify-chatbot-bubble-window [class*='submit'],
+  #dify-chatbot-bubble-window [class*='Submit'] {
+    background: linear-gradient(135deg, #31572c 0%, #4f772d 100%) !important;
+    color: #fff !important;
+    border: none !important;
+    box-shadow: 0 14px 28px rgba(49,87,44,.16), 0 1px 0 rgba(255,255,255,.12) inset !important;
+  }
+
+  #dify-chatbot-bubble-window button[type='submit'] *,
+  #dify-chatbot-bubble-window [class*='send'] *,
+  #dify-chatbot-bubble-window [class*='Send'] *,
+  #dify-chatbot-bubble-window [class*='primaryButton'] *,
+  #dify-chatbot-bubble-window [class*='PrimaryButton'] * {
+    color: #fff !important;
+    fill: currentColor !important;
+    stroke: currentColor !important;
+  }
+  #dify-chatbot-bubble-window button[type='submit']:hover,
+  #dify-chatbot-bubble-window [class*='send']:hover,
+  #dify-chatbot-bubble-window [class*='Send']:hover,
+  #dify-chatbot-bubble-window [class*='primaryButton']:hover,
+  #dify-chatbot-bubble-window [class*='PrimaryButton']:hover {
+    transform: translateY(-1px) !important;
+    box-shadow: 0 18px 32px rgba(49,87,44,.2) !important;
+  }
+
+  #dify-chatbot-bubble-window button:not([type='submit']):not([class*='send']):not([class*='Send']):not([class*='primaryButton']):not([class*='PrimaryButton']),
+  #dify-chatbot-bubble-window [role='button']:not([class*='send']):not([class*='Send']):not([class*='primary']) {
+    background: rgba(255,255,255,.8) !important;
+    color: var(--heal-brand) !important;
+    border: 1px solid var(--heal-line) !important;
+    box-shadow: 0 6px 16px rgba(49,87,44,.05) !important;
+  }
+
+  #dify-chatbot-bubble-window button:not([type='submit']):hover,
+  #dify-chatbot-bubble-window [role='button']:not([class*='send']):hover {
+    transform: translateY(-1px) !important;
+    border-color: var(--heal-line-strong) !important;
+  }
+
+  #dify-chatbot-bubble-window,
+  #dify-chatbot-bubble-window * {
+    scrollbar-color: rgba(49,87,44,.34) transparent;
+  }
+
+  #dify-chatbot-bubble-window::-webkit-scrollbar,
+  #dify-chatbot-bubble-window *::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  #dify-chatbot-bubble-window::-webkit-scrollbar-thumb,
+  #dify-chatbot-bubble-window *::-webkit-scrollbar-thumb {
+    background: rgba(49,87,44,.24);
+    border-radius: 999px;
+  }
+
+  #dify-chatbot-bubble-button.is-dragging,
+  #dify-chatbot-bubble-window.is-dragging {
+    transition: none !important;
+    animation: none !important;
+    cursor: grabbing !important;
+    user-select: none !important;
+  }
+
+  #dify-chatbot-bubble-window.drag-handle-active {
+    cursor: grab !important;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    #dify-chatbot-bubble-button,
+    #dify-chatbot-bubble-button::before,
+    #dify-chatbot-bubble-window.dify-window-open,
+    #dify-chatbot-bubble-window header,
+    #dify-chatbot-bubble-window [class*='header'],
+    #dify-chatbot-bubble-window [class*='Header'] {
+      animation: none !important;
+    }
+  }
+
+  @media (max-width: 768px) {
+    #dify-chatbot-bubble-button {
+      width: 60px !important;
+      height: 60px !important;
+      border-radius: 22px !important;
+    }
+
+    #dify-chatbot-bubble-window {
+      width: min(94vw, 24rem) !important;
+      height: min(74vh, 38rem) !important;
+      border-radius: 24px !important;
+    }
+
+    #dify-chatbot-bubble-window::after {
+      font-size: 10px !important;
+      padding: 5px 10px !important;
+      top: 14px !important;
+    }
+
+    #dify-chatbot-bubble-window textarea,
+    #dify-chatbot-bubble-window input,
+    #dify-chatbot-bubble-window [contenteditable='true'] {
+      min-height: 42px !important;
+      border-radius: 16px !important;
+      padding: 10px 14px !important;
+    }
+  }
+</style>
+<script>
+(function(){
+  const BUBBLE_POSITION_KEY = 'dify_bubble_position';
+  const PANEL_POSITION_KEY = 'dify_panel_position';
+  const PANEL_DRAG_HANDLE_HEIGHT = 64;
+
+  function clamp(value, min, max){
+    return Math.min(Math.max(value, min), max);
+  }
+
+  function getKey(el){
+    return el && el.id === 'dify-chatbot-bubble-window' ? PANEL_POSITION_KEY : BUBBLE_POSITION_KEY;
+  }
+
+  function applyPosition(el, pos){
+    if(!el || !pos) return;
+    const maxLeft = Math.max(8, window.innerWidth - el.offsetWidth - 8);
+    const maxTop = Math.max(8, window.innerHeight - el.offsetHeight - 8);
+    const left = clamp(pos.left, 8, maxLeft);
+    const top = clamp(pos.top, 8, maxTop);
+    el.style.left = `${left}px`;
+    el.style.top = `${top}px`;
+    el.style.right = 'auto';
+    el.style.bottom = 'auto';
+    el.style.position = 'fixed';
+  }
+
+  function loadSavedPosition(key){
+    try{
+      const raw = localStorage.getItem(key);
+      return raw ? JSON.parse(raw) : null;
+    }catch(_e){
+      return null;
+    }
+  }
+
+  function savePosition(key, pos){
+    localStorage.setItem(key, JSON.stringify(pos));
+  }
+
+  function isPanelVisible(panel){
+    if(!panel) return false;
+    const styles = window.getComputedStyle(panel);
+    return styles.display !== 'none' && styles.visibility !== 'hidden' && styles.opacity !== '0';
+  }
+
+  function positionPanelNearBubble(panel, bubble){
+    if(!panel || !bubble) return;
+    const bubbleRect = bubble.getBoundingClientRect();
+    const panelWidth = panel.offsetWidth || 432;
+    const panelHeight = panel.offsetHeight || 688;
+    const desiredLeft = bubbleRect.right - panelWidth;
+    const desiredTop = bubbleRect.top - panelHeight - 18;
+    applyPosition(panel, { left: desiredLeft, top: desiredTop });
+  }
+
+  function enableDrag(el, options = {}){
+    if(!el || el.dataset.dragReady === 'true') return;
+    el.dataset.dragReady = 'true';
+    el.style.touchAction = 'none';
+    el.style.cursor = options.headerOnly ? 'default' : 'grab';
+
+    const positionKey = getKey(el);
+    const saved = loadSavedPosition(positionKey);
+    if(saved) applyPosition(el, saved);
+
+    let drag = null;
+
+    const onPointerMove = (event) => {
+      if(!drag) return;
+      const left = event.clientX - drag.offsetX;
+      const top = event.clientY - drag.offsetY;
+      applyPosition(el, { left, top });
+    };
+
+    const onPointerUp = () => {
+      if(!drag) return;
+      el.classList.remove('is-dragging');
+      if(options.headerOnly) {
+        el.classList.remove('drag-handle-active');
+      } else {
+        el.style.cursor = 'grab';
+      }
+      savePosition(positionKey, { left: el.offsetLeft, top: el.offsetTop });
+      drag = null;
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+    };
+
+    el.addEventListener('pointerdown', (event) => {
+      if(event.button !== 0) return;
+
+      if(options.headerOnly) {
+        const rect = el.getBoundingClientRect();
+        const offsetY = event.clientY - rect.top;
+        if(offsetY > PANEL_DRAG_HANDLE_HEIGHT) return;
+        const interactive = event.target.closest('input, textarea, button, a, iframe');
+        if(interactive) return;
+        el.classList.add('drag-handle-active');
+      } else {
+        const interactive = event.target.closest('input, textarea, button, a, iframe');
+        if(interactive) return;
+      }
+
+      drag = {
+        offsetX: event.clientX - el.getBoundingClientRect().left,
+        offsetY: event.clientY - el.getBoundingClientRect().top
+      };
+      el.classList.add('is-dragging');
+      if(!options.headerOnly) el.style.cursor = 'grabbing';
+      window.addEventListener('pointermove', onPointerMove);
+      window.addEventListener('pointerup', onPointerUp);
+    });
+  }
+
+  function observeWindowState(panel){
+    if(!panel || panel.dataset.windowObserved === 'true') return;
+    panel.dataset.windowObserved = 'true';
+    let wasVisible = isPanelVisible(panel);
+    if(wasVisible) panel.classList.add('dify-window-open');
+
+    const observer = new MutationObserver(() => {
+      const visible = isPanelVisible(panel);
+      if(visible && !wasVisible) {
+        const bubble = document.getElementById('dify-chatbot-bubble-button');
+        const hasSavedPanelPosition = !!loadSavedPosition(PANEL_POSITION_KEY);
+        if(!hasSavedPanelPosition && bubble) {
+          positionPanelNearBubble(panel, bubble);
+        }
+        panel.classList.remove('dify-window-open');
+        requestAnimationFrame(() => panel.classList.add('dify-window-open'));
+      }
+      wasVisible = visible;
+    });
+
+    observer.observe(panel, { attributes: true, attributeFilter: ['style', 'class'] });
+  }
+
+  function initDifyWidget(){
+    const bubble = document.getElementById('dify-chatbot-bubble-button');
+    const panel = document.getElementById('dify-chatbot-bubble-window');
+    if(bubble) enableDrag(bubble);
+    if(panel) {
+      enableDrag(panel, { headerOnly: true });
+      observeWindowState(panel);
+      const savedPanelPosition = loadSavedPosition(PANEL_POSITION_KEY);
+      if(!savedPanelPosition && bubble && !isPanelVisible(panel)) {
+        positionPanelNearBubble(panel, bubble);
+      }
+    }
+    if(!bubble && !panel) {
+      window.requestAnimationFrame(initDifyWidget);
+    }
+  }
+
+  window.addEventListener('resize', () => {
+    const bubble = document.getElementById('dify-chatbot-bubble-button');
+    const panel = document.getElementById('dify-chatbot-bubble-window');
+    const bubbleSaved = loadSavedPosition(BUBBLE_POSITION_KEY);
+    const panelSaved = loadSavedPosition(PANEL_POSITION_KEY);
+    if(panel && panel.style.left && panelSaved) applyPosition(panel, panelSaved);
+    if(bubble && bubble.style.left && bubbleSaved) applyPosition(bubble, bubbleSaved);
+  });
+
+  window.addEventListener('load', initDifyWidget);
+  setTimeout(initDifyWidget, 1200);
+})();
+</script>
+<!-- ====================== Dify AI 聊天机器人 结束 ====================== -->
+
+</body>
+</html>

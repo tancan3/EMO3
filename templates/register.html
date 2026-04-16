@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>注册 — 心愈</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Noto+Sans+SC:wght@300;400;500;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+<style>
+body{margin:0;font-family:'Noto Sans SC',sans-serif;color:#173118;background:radial-gradient(circle at 18% 16%, rgba(255,255,255,.28), transparent 24%),linear-gradient(180deg,#365f31 0%,#6f963e 14%,#a6c561 34%,#dce88c 58%,#eef2bb 100%);overflow-x:hidden;}
+.wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:28px;position:relative;overflow:hidden;}.wrap:before{content:'';position:absolute;width:480px;height:480px;right:-140px;top:40px;border-radius:50%;background:radial-gradient(circle, rgba(236,243,158,.52), rgba(236,243,158,.14) 48%, rgba(236,243,158,0) 72%);}.wrap:after{content:'';position:absolute;width:220px;height:220px;left:-70px;bottom:60px;border-radius:28px;background:linear-gradient(180deg,#edf39f 0%,#9db862 100%);transform:rotate(14deg);box-shadow:0 26px 48px rgba(71,75,17,.14);}
+.auth-card{width:100%;max-width:560px;position:relative;z-index:1;}.brand-link{display:flex;flex-direction:column;align-items:center;justify-content:center;text-decoration:none;margin-bottom:24px;}.brand-mark{font-family:'Bebas Neue',sans-serif;font-size:56px;line-height:.84;color:#fffaf0;text-shadow:0 4px 18px rgba(69,34,0,.1);}.brand-sub{font-size:11px;font-weight:800;color:#31572c;letter-spacing:.14em;text-transform:uppercase;margin-top:4px;}
+.form-panel{background:rgba(255,253,245,.92);border:1px solid rgba(79,119,45,.12);border-radius:32px;padding:38px 34px;box-shadow:0 34px 70px rgba(49,87,44,.16);backdrop-filter:blur(12px);}.eyebrow{display:inline-flex;padding:7px 12px;border-radius:999px;background:rgba(255,255,255,.5);color:#31572c;font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;margin-bottom:14px;}.form-panel h1{font-size:36px;line-height:.95;font-weight:900;color:#173118;margin-bottom:8px;letter-spacing:-.04em;}.form-panel .sub{font-size:13px;color:var(--text-3);margin-bottom:22px;}.input-field{border-radius:20px;padding:13px 15px;background:rgba(255,255,255,.84);}.form-label{font-weight:800;color:#31572c;}.btn{border-radius:999px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;}.btn-primary{background:#fffdf5;color:#31572c;box-shadow:0 16px 28px rgba(49,87,44,.12);}.btn-primary:hover{background:#fff;color:#173118;}.alert{background:var(--c-red-bg);border:1px solid rgba(196,81,60,.16);color:var(--c-red);padding:10px 13px;border-radius:16px;font-size:13px;text-align:center;margin-bottom:16px;}.info-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:20px;}.info-pill{padding:8px 12px;border-radius:999px;background:rgba(255,255,255,.46);color:#31572c;font-size:11px;font-weight:800;letter-spacing:.06em;}.foot-note{text-align:center;margin-top:16px;font-size:11px;color:var(--text-4);}
+@media(max-width:640px){.wrap{padding:16px;}.form-panel{padding:30px 22px;border-radius:28px;}.brand-mark{font-size:46px;}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="auth-card">
+    <a href="/" class="brand-link">
+      <div class="brand-mark">HEAL<br>SPACE</div>
+      <div class="brand-sub">心愈</div>
+    </a>
+    <div class="form-panel">
+      <div class="eyebrow">开始建立你的情绪空间</div>
+      <h1>创建账号</h1>
+      <p class="sub">加入我们，开始关注你的心理健康、情绪节奏与长期成长。</p>
+      {% with messages = get_flashed_messages() %}{% if messages %}{% for m in messages %}
+      <div class="alert">{{ m }}</div>
+      {% endfor %}{% endif %}{% endwith %}
+      <form action="/register" method="POST" style="display:flex;flex-direction:column;gap:14px;" onsubmit="return chk(this)">
+        <div><label class="form-label">用户名</label><input type="text" name="username" required class="input-field" placeholder="3-20 个字符，建议使用容易记住的名字"></div>
+        <div><label class="form-label">密码</label><input type="password" id="pw" name="password" required class="input-field" placeholder="至少 6 个字符"></div>
+        <div><label class="form-label">确认密码</label><input type="password" id="pw2" name="confirm_password" required class="input-field" placeholder="再次输入密码" oninput="syncPasswordHint()"></div>
+        <div id="pw-tip" style="display:none;font-size:12px;color:var(--c-primary);margin-top:-4px;">两次密码已一致，可以继续</div>
+        <div id="pw-err" class="alert" style="display:none;">两次密码不一致，请重新确认</div>
+        <button id="register-submit-btn" type="submit" class="btn btn-primary" style="width:100%;padding:13px;margin-top:2px;">立即注册</button>
+      </form>
+      <div class="info-row"><span class="info-pill">多维评估</span><span class="info-pill">AI 陪伴</span><span class="info-pill">成长记录</span></div>
+      <p style="text-align:center;margin-top:22px;font-size:13px;color:var(--text-2);">已有账号？ <a href="/login" style="color:var(--c-primary);font-weight:700;">去登录</a></p>
+    </div>
+    <p class="foot-note">注册即同意 <a href="#" style="color:var(--text-3);">服务条款</a> 与 <a href="#" style="color:var(--text-3);">隐私政策</a></p>
+  </div>
+</div>
+<script src="{{ url_for('static', filename='js/notifications.js') }}"></script>
+<script>
+function syncPasswordHint(){
+  const pw=document.getElementById('pw');
+  const pw2=document.getElementById('pw2');
+  const ok=pw.value!==''&&pw.value===pw2.value;
+  document.getElementById('pw-tip').style.display=ok?'block':'none';
+  document.getElementById('pw-err').style.display='none';
+}
+function chk(form){
+  const ok=document.getElementById('pw').value===document.getElementById('pw2').value;
+  document.getElementById('pw-tip').style.display=ok&&document.getElementById('pw').value!==''?'block':'none';
+  document.getElementById('pw-err').style.display=ok?'none':'block';
+  if(ok){
+    const btn=document.getElementById('register-submit-btn');
+    if(btn){btn.disabled=true;btn.textContent='创建中...';}
+  }
+  return ok;
+}
+</script>
+</body></html>

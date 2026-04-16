@@ -1,0 +1,128 @@
+{% extends 'base.html' %}
+{% block title %}评估报告 — 心愈{% endblock %}
+{% block page_title %}评估报告{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<div style="padding:32px 28px 60px;">
+
+  <!-- 主要内容 -->
+  <div style="display:flex;flex-wrap:wrap;align-items:center;gap:48px;margin-bottom:56px;">
+    <div id="radar-chart" style="width:100%;max-width:440px;height:420px;flex-shrink:0;" class="anim-fade-up"></div>
+    <div style="flex:1;min-width:260px;" class="anim-fade-up delay-2">
+      <div style="font-size:11px;font-weight:700;color:var(--c-primary);letter-spacing:.10em;text-transform:uppercase;margin-bottom:10px;">Assessment Report</div>
+      <h1 style="font-size:clamp(22px,4vw,36px);font-weight:800;color:var(--text-1);margin-bottom:10px;line-height:1.2;letter-spacing:-.03em;">
+        检测结论：<span id="risk-text" style="background:linear-gradient(90deg,var(--c-primary),var(--c-green));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">计算中...</span>
+      </h1>
+      <p style="font-size:14px;color:var(--text-2);line-height:1.85;margin-bottom:24px;max-width:440px;">基于 PHQ-9 抑郁、GAD-7 焦虑、睡眠质量、压力感知、社交压力及自我认同六大维度的交叉分析，结合 <span style="color:var(--c-orange);font-weight:600;">语音 + 视觉实时检测</span>，为您生成全方位心理画像。</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:24px;">
+        <div class="card" style="padding:16px 18px;">
+          <p style="font-size:10px;font-weight:700;color:var(--text-4);letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px;">主要压力源</p>
+          <p id="top-stressor" style="font-weight:700;color:var(--text-1);font-size:15px;">分析中...</p>
+        </div>
+        <div class="card" style="padding:16px 18px;">
+          <p style="font-size:10px;font-weight:700;color:var(--text-4);letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px;">多模态情绪结果</p>
+          <p id="voice-result" style="font-weight:700;color:var(--text-1);font-size:15px;">实时匹配中</p>
+        </div>
+      </div>
+      <div style="padding:18px 22px;background:var(--c-primary-bg);border:1px solid rgba(49,87,44,0.2);border-radius:var(--r-md);margin-bottom:16px;font-size:13px;color:var(--text-2);line-height:1.8;">
+        这份结果用于帮助您快速看见近期状态与压力重心，适合作为自我观察的起点；它不等同于医学诊断，如果您已经明显感到痛苦，请优先联系专业人士。
+      </div>
+      <div style="padding:18px 22px;background:var(--bg);border:1px solid var(--border);border-radius:var(--r-md);margin-bottom:24px;font-size:13px;color:var(--text-2);line-height:1.8;font-style:italic;">
+        &ldquo;您的每一个细微情绪，都值得被温柔对待。如果您感到疲惫，可以先去 AI 情绪陪伴里慢慢说。&rdquo;
+      </div>
+      <div id="action-suggestion" style="margin-bottom:20px;padding:14px 16px;border-radius:var(--r-md);background:rgba(255,255,255,.72);border:1px dashed rgba(49,87,44,.18);font-size:13px;color:var(--text-2);line-height:1.75;">正在生成下一步建议...</div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;">
+        <a href="/soothe" class="btn btn-primary" style="flex:1;justify-content:center;">去聊聊，先缓一缓</a>
+        <a href="/detect" class="btn btn-ghost">重新测试</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- 推荐阅读 -->
+  <div>
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:12px;">
+      <div class="icon-box icon-box-blue" style="font-size:20px;">📖</div>
+      <div>
+        <h2 style="font-size:15px;font-weight:700;color:var(--text-1);letter-spacing:-.02em;">推荐阅读</h2>
+        <p style="font-size:13px;color:var(--text-3);">根据您的测评结果智能推荐</p>
+      </div>
+    </div>
+    <p style="font-size:13px;color:var(--text-2);margin-bottom:24px;line-height:1.7;">如果你想先做一点具体的事，可以从下面这些内容开始。</p>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:18px;flex-wrap:wrap;">
+      <span style="font-size:11px;color:var(--text-3);padding:6px 10px;border-radius:999px;background:var(--bg);border:1px solid var(--border);">本次结果已生成</span>
+      <span id="report-time" style="font-size:11px;color:var(--c-primary);font-weight:700;">生成时间读取中...</span>
+    </div>
+    <div id="recommended-articles" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px;">
+      <div style="height:160px;border-radius:var(--r-lg);background:var(--border);opacity:.5;"></div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+{% if session.get('user_id') %}sessionStorage.setItem('user_id','{{ session.get("user_id") }}');{% endif %}
+const catNames={'Depression':'抑郁','Anxiety':'焦虑','Sleep':'睡眠','Pressure':'压力','Social':'社交','Self':'自我成长'};
+const catBadge={'Depression':'badge-red','Anxiety':'badge-orange','Sleep':'badge-blue','Pressure':'badge-orange','Social':'badge-green','Self':'badge-blue'};
+const data=JSON.parse(localStorage.getItem('eval_result'))||{radar_data:[5,5,5,5,5,5,5],risk_level:'数据读取失败'};
+document.getElementById('risk-text').textContent=data.risk_level;
+const indNames=['抑郁指征','焦虑水平','睡眠指数','压力感知','社交压力','自我认同'];
+const scores=data.radar_data.slice(0,6);
+const maxIdx=scores.indexOf(Math.max(...scores));
+document.getElementById('top-stressor').textContent=indNames[maxIdx];
+const voiceVal=data.radar_data[6]||2;
+const visionEmotion=data.vision?.emotion||'Neutral';
+const summaryText=document.getElementById('action-suggestion');
+document.getElementById('voice-result').textContent=voiceVal>=5?`当前压力波动偏高（视觉:${visionEmotion}）`:`当前状态相对平稳（视觉:${visionEmotion}）`;
+if(summaryText){
+  if(data.risk_level==='高风险') summaryText.textContent='建议先去 AI 情绪陪伴里把此刻最强烈的感受说出来，再结合推荐内容做一步一步的缓和；如果痛苦持续明显，请尽快联系专业帮助。';
+  else if(data.risk_level==='中等风险') summaryText.textContent='建议先记录这一周最明显的压力来源，再去看看推荐内容，给自己留一个稳定节奏的调整空间。';
+  else summaryText.textContent='当前结果更适合用于持续观察。你可以继续保持打卡与记录，把稳定状态慢慢巩固下来。';
+}
+const chart=echarts.init(document.getElementById('radar-chart'));
+chart.setOption({
+  backgroundColor:'transparent',
+  radar:{indicator:[{name:'抑郁指征',max:10},{name:'焦虑水平',max:10},{name:'睡眠指数',max:10},{name:'压力感知',max:10},{name:'社交压力',max:10},{name:'自我认同',max:10},{name:'多模态情绪',max:10}],
+    shape:'circle',radius:'65%',
+    axisName:{color:'var(--text-3)',fontSize:12,fontWeight:'bold'},
+    splitLine:{lineStyle:{color:'var(--border)',width:1}},
+    splitArea:{show:false},axisLine:{lineStyle:{color:'var(--border)'}}},
+  series:[{type:'radar',data:[{value:data.radar_data,name:'心理特征',symbol:'circle',symbolSize:6,
+    areaStyle:{color:new echarts.graphic.RadialGradient(0.5,0.5,1,[{color:'rgba(79,119,45,0.45)',offset:0},{color:'rgba(79,119,45,0.05)',offset:1}])},
+    lineStyle:{width:2.5,color:'#4f772d'},
+    itemStyle:{color:'#4f772d',borderWidth:2,borderColor:'rgba(255,255,255,0.3)'}}]}]
+});
+window.onresize=()=>chart.resize();
+const reportTimeEl=document.getElementById('report-time');
+if(reportTimeEl){
+  const now=new Date();
+  reportTimeEl.textContent=`生成于 ${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+}
+async function loadRecommendedArticles(){
+  try{
+    const cat=data.highest_category||'';
+    const res=await fetch('/api/articles/recommend?category='+cat+'\u0026limit=3');
+    const articles=await res.json();
+    const c=document.getElementById('recommended-articles');
+    if(!articles||!articles.length){c.innerHTML='<div style="color:var(--text-3);padding:40px;text-align:center;grid-column:1/-1;">暂无推荐文章</div>';return;}
+    c.innerHTML=articles.map(a=>
+      '<div onclick="location.href=\'/article/'+a.id+'\'" class="card glass-card-hoverable" style="padding:24px;cursor:pointer;">'+
+      '<span class="badge '+(catBadge[a.category]||'badge-blue')+'" style="margin-bottom:12px;display:inline-flex;">'+(catNames[a.category]||'科普')+'</span>'+
+      '<h3 style="font-size:15px;font-weight:700;color:var(--text-1);margin-bottom:8px;line-height:1.4;">'+a.title+'</h3>'+
+      '<p style="font-size:13px;color:var(--text-2);line-height:1.6;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">'+(a.summary||'点击查看全文')+'</p>'+
+      '<div style="margin-top:14px;display:flex;align-items:center;gap:4px;font-size:13px;color:var(--c-primary);font-weight:600;">阅读全文<svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg></div>'+
+      '</div>'
+    ).join('');
+  }catch(e){
+    document.getElementById('recommended-articles').innerHTML='<div style="color:var(--text-3);padding:40px;text-align:center;grid-column:1/-1;">暂无推荐文章</div>';
+  }
+}
+window.addEventListener('load', loadRecommendedArticles);
+</script>
+{% endblock %}

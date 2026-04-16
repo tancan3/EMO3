@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>心愈</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Noto+Sans+SC:wght@400;500;700;800;900&display=swap"
+    rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box
+    }
+
+    body {
+      font-family: 'Noto Sans SC', sans-serif;
+      background: #f6f8ef;
+      color: #18311b;
+      overflow-x: hidden;
+    }
+
+    .home {
+      min-height: 100vh;
+      background: radial-gradient(circle at 70% 30%, rgba(240, 255, 180, .45), transparent 30%), linear-gradient(180deg, #345d2f 0%, #6e9c43 18%, #b9d96f 58%, #eef5c7 100%);
+    }
+
+    .shell {
+      max-width: 1400px;
+      margin: auto;
+      padding: 32px 40px 50px;
+    }
+
+    .nav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 50px;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+
+    .brand-wrap {
+      text-decoration: none;
+      display: inline-block;
+    }
+
+    .brand-mark {
+      font-family: 'Outfit', sans-serif;
+      font-size: 44px;
+      line-height: .9;
+      font-weight: 800;
+      color: #fffef7;
+      letter-spacing: -.03em;
+    }
+
+    .brand-sub {
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: .18em;
+      color: #eaf5d4;
+      margin-top: 6px;
+    }
+
+    .nav-actions {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .nav-links a {
+      text-decoration: none;
+      color: #244225;
+      font-weight: 700;
+      padding: 12px 20px;
+      border-radius: 999px;
+      transition: .25s;
+    }
+
+    .nav-links a:hover {
+      background: rgba(255, 255, 255, .35);
+    }
+
+    .nav-user {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 16px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, .2);
+      color: #fffef7;
+      text-decoration: none;
+      font-weight: 700;
+      border: 1px solid rgba(255, 255, 255, .22);
+      backdrop-filter: blur(8px);
+    }
+
+    .nav-auth {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .nav-auth a {
+      text-decoration: none;
+      font-weight: 700;
+      padding: 11px 18px;
+      border-radius: 999px;
+      transition: .25s;
+    }
+
+    .nav-auth .ghost {
+      background: rgba(255, 255, 255, .18);
+      color: #fffef7;
+      border: 1px solid rgba(255, 255, 255, .24);
+    }
+
+    .nav-auth .solid {
+      background: #fffef7;
+      color: #264626;
+      box-shadow: 0 14px 30px rgba(49, 87, 44, .12);
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: 1.05fr .95fr;
+      gap: 40px;
+      align-items: center;
+      min-height: 75vh;
+    }
+
+    .visual {
+      position: relative;
+      min-height: 580px;
+    }
+
+    .card {
+      position: absolute;
+      border-radius: 28px;
+      padding: 28px;
+      box-shadow: 0 25px 50px rgba(45, 70, 20, .12);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      backdrop-filter: blur(8px);
+      transition: all 0.3s ease;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .card:hover {
+      transform: rotate(0deg) scale(1.03);
+    }
+
+    .card small {
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      opacity: .7;
+    }
+
+    .card h3 {
+      font-family: 'Outfit', sans-serif;
+      font-size: 46px;
+      line-height: .92;
+      font-weight: 800;
+      color: #31572c;
+      margin: 10px 0;
+    }
+
+    .card p {
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .card-1 {
+      width: 260px;
+      height: 360px;
+      background: linear-gradient(180deg, #f8fbe5, #cfe48a 70%, #90ad52);
+      left: 40px;
+      top: 60px;
+      transform: rotate(-12deg);
+    }
+
+    .card-2 {
+      width: 220px;
+      height: 280px;
+      background: linear-gradient(180deg, #f7faef, #d9ebb4);
+      left: 260px;
+      top: 240px;
+      transform: rotate(-6deg);
+    }
+
+    .card-3 {
+      width: 180px;
+      height: 230px;
+      background: linear-gradient(180deg, #eef7c8, #b7cf72);
+      left: 460px;
+      top: 120px;
+      transform: rotate(8deg);
+    }
+
+    .copy .eyebrow {
+      display: inline-block;
+      padding: 8px 16px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, .4);
+      font-size: 12px;
+      font-weight: 800;
+      margin-bottom: 24px;
+      color: #31572c;
+    }
+
+    .copy h1 {
+      margin-bottom: 28px;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 8px;
+      color: #102812;
+    }
+
+    .copy h1 span {
+      display: block;
+    }
+
+    .copy h1 .cn-title {
+      font-size: 76px;
+      font-weight: 800;
+      letter-spacing: .06em;
+      color: #31572c;
+      line-height: 1;
+    }
+
+    .copy h1 .en-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 28px;
+      line-height: 1.15;
+      font-weight: 500;
+      letter-spacing: .38em;
+      text-transform: uppercase;
+      color: rgba(16, 40, 18, .72);
+    }
+
+    .copy .sub {
+      font-size: 18px;
+      line-height: 1.85;
+      color: #355636;
+      max-width: 540px;
+      margin-bottom: 40px;
+      font-weight: 500;
+    }
+
+    .badge-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 30px;
+    }
+
+    .badge {
+      padding: 10px 16px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, .4);
+      font-size: 12px;
+      font-weight: 800;
+      color: #31572c;
+    }
+
+    .cta-row {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      text-decoration: none;
+      padding: 18px 34px;
+      border-radius: 999px;
+      font-weight: 800;
+      background: #fffef7;
+      color: #264626;
+      box-shadow: 0 14px 30px rgba(49, 87, 44, .12);
+      transition: .3s ease;
+    }
+
+    .btn.alt {
+      background: rgba(255, 255, 255, .55)
+    }
+
+    .btn:hover,
+    .nav-auth a:hover,
+    .nav-user:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 20px 40px rgba(49, 87, 44, .18);
+    }
+
+    .quick-entry {
+      margin-top: 28px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px;
+      align-items: center;
+      color: #355636;
+    }
+
+    .quick-entry span {
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    .quick-entry a {
+      color: #244225;
+      text-decoration: none;
+      font-weight: 700;
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, .38);
+    }
+
+    .quick-entry a:hover {
+      background: rgba(255, 255, 255, .58);
+    }
+
+    /* 平板端适配 */
+    @media(max-width:1100px) {
+      .hero {
+        grid-template-columns: 1fr;
+        gap: 60px;
+      }
+
+      .visual {
+        min-height: 450px;
+        order: 2;
+      }
+
+      .copy {
+        order: 1;
+      }
+    }
+
+    /* 移动端适配 */
+    @media(max-width:768px) {
+      .shell {
+        padding: 20px;
+      }
+
+      .nav {
+        flex-direction: column;
+        gap: 20px;
+        align-items: flex-start;
+        margin-bottom: 30px;
+      }
+
+      .nav-actions {
+        justify-content: flex-start;
+      }
+
+      .copy h1 .cn-title {
+        font-size: 48px;
+      }
+
+      .copy h1 .en-title {
+        font-size: 20px;
+      }
+
+      .visual {
+        min-height: 380px;
+      }
+
+      .card-1 {
+        width: 160px;
+        height: 230px;
+        left: 20px;
+        top: 40px;
+      }
+
+      .card-2 {
+        width: 140px;
+        height: 180px;
+        left: 180px;
+        top: 150px;
+      }
+
+      .card-3 {
+        width: 110px;
+        height: 150px;
+        left: 90px;
+        top: 220px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="home">
+    <div class="shell">
+      <header class="nav">
+        <a class="brand-wrap" href="{{ url_for('index') }}">
+          <div class="brand-mark">HEAL<br>SPACE</div>
+          <div class="brand-sub">心愈</div>
+        </a>
+        <div class="nav-actions">
+          <nav class="nav-links">
+            <a href="{{ url_for('detect') }}">情绪检测</a>
+            <a href="{{ url_for('soothe') }}">AI 疗愈</a>
+            <a href="{{ url_for('report') }}">成长报告</a>
+            <a href="{{ url_for('articles') }}">心理科普</a>
+            <a href="{{ url_for('community') }}">社区互助</a>
+          </nav>
+          {% if session.get('user_id') %}
+          <a class="nav-user" href="{{ url_for('profile') }}">{{ session.get('username', '我的主页') }}</a>
+          {% else %}
+          <div class="nav-auth">
+            <a class="ghost" href="{{ url_for('login') }}">登录</a>
+            <a class="solid" href="{{ url_for('register') }}">注册</a>
+          </div>
+          {% endif %}
+        </div>
+      </header>
+      <main class="hero">
+        <section class="visual">
+          <div class="card card-1">
+            <small>Emotion Scan</small>
+            <h3>MOOD<br>CHECK</h3>
+            <p>量表 · 语音 · 表情识别</p>
+          </div>
+          <div class="card card-2">
+            <small>AI Care</small>
+            <h3>TALK<br>SOFTLY</h3>
+            <p>陪你说完那些情绪</p>
+          </div>
+          <div class="card card-3">
+            <small>Track</small>
+            <h3>GROW</h3>
+            <p>记录每次变好</p>
+          </div>
+        </section>
+        <section class="copy">
+          <div class="eyebrow">你的 AI 情绪疗愈空间</div>
+          <h1>
+            <span class="cn-title">心愈</span>
+            <span class="en-title">HEALSPACE</span>
+          </h1>
+          <p class="sub">通过多模态情绪识别、AI 疗愈陪伴与长期成长追踪，帮助你更温柔地理解自己、照顾自己。</p>
+
+          <div class="cta-row">
+            <a class="btn" href="{{ url_for('detect') }}">开始情绪检测</a>
+            <a class="btn alt" href="{{ url_for('soothe') }}">和 AI 聊聊</a>
+            <a class="btn alt" href="{{ url_for('articles') }}">查看疗愈方法</a>
+          </div>
+
+          <div class="quick-entry">
+            <span>快速进入</span>
+            <a href="{{ url_for('community') }}">匿名社区</a>
+            <a href="{{ url_for('books') }}">书籍推荐</a>
+            <a href="{{ url_for('history') }}">检测档案</a>
+          </div>
+
+          <div class="badge-row">
+            <div class="badge">3–5 分钟完成</div>
+            <div class="badge">支持语音 / 文本</div>
+            <div class="badge">生成成长报告</div>
+            <div class="badge">长期趋势记录</div>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+</body>
+
+</html>
