@@ -53,6 +53,13 @@ body{margin:0;font-family:'Noto Sans SC',sans-serif;color:#173118;background:rad
         <div class="alert">{{ m }}</div>
         {% endfor %}{% endif %}{% endwith %}
         <form action="/login" method="POST" style="display:flex;flex-direction:column;gap:14px;" onsubmit="return handleLoginSubmit(this)">
+          <div>
+            <label class="form-label">登录身份</label>
+            <div style="display:flex;gap:8px;">
+              <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-2);"><input type="radio" name="login_type" value="user" checked> 用户</label>
+              <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-2);"><input type="radio" name="login_type" value="admin"> 管理员</label>
+            </div>
+          </div>
           <div><label class="form-label">用户名</label><input type="text" name="username" required class="input-field" placeholder="请输入用户名（3-20 个字符）"></div>
           <div>
             <div style="display:flex;justify-content:space-between;margin-bottom:6px;gap:8px;align-items:center;"><label class="form-label" style="margin-bottom:0;">密码</label><span style="font-size:11px;color:var(--text-4);">至少 6 位</span></div>

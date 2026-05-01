@@ -1,0 +1,158 @@
+{% extends 'base.html' %}
+{% block title %}MBTI 人格画像 — 心愈{% endblock %}
+{% block page_title %}MBTI 人格画像{% endblock %}
+
+{% block content %}
+<div style="padding:32px 28px 60px;max-width:1200px;margin:0 auto;">
+  <div style="display:grid;grid-template-columns:minmax(0,1.35fr) minmax(280px,.65fr);gap:18px;align-items:start;">
+
+    <div style="display:flex;flex-direction:column;gap:18px;min-width:0;">
+      <div class="card" style="padding:24px;">
+        <div style="font-size:11px;color:var(--c-primary);font-weight:700;letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px;">Personality Layer</div>
+        <h1 style="font-size:28px;font-weight:800;margin:0 0 8px;">MBTI 人格画像</h1>
+        <p style="font-size:13px;color:var(--text-3);line-height:1.8;margin:0;">用于个性化干预建议，不参与风险评分，不作为临床诊断依据。</p>
+      </div>
+
+      <div class="card" style="padding:24px;">
+        <div id="mbti-start" style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+          <div>
+            <div style="font-weight:700;color:var(--text-1);margin-bottom:4px;">60 题经典标准版（A/B 二选一）</div>
+            <div style="font-size:13px;color:var(--text-3);">约 3-5 分钟，完成后可同步到评估报告页与 AI 陪伴开场词。</div>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn btn-primary" onclick="startMbti()">开始人格测试</button>
+            <button id="mbti-retake-btn" class="btn btn-ghost" style="display:none;" onclick="startMbti(true)">重新测试</button>
+          </div>
+        </div>
+
+        <div id="mbti-quiz" style="display:none;"></div>
+      </div>
+
+      <div id="mbti-result" class="card" style="padding:24px;display:none;"></div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:18px;position:sticky;top:92px;">
+      <div class="card" style="padding:18px;">
+        <div style="font-size:11px;color:var(--text-4);font-weight:700;letter-spacing:.08em;text-transform:uppercase;margin-bottom:8px;">使用说明</div>
+        <ul style="margin:0;padding-left:18px;color:var(--text-3);font-size:13px;line-height:1.9;">
+          <li>MBTI 仅做人格补充，不参与风险等级计算。</li>
+          <li>每题 A/B 二选一，按第一直觉作答。</li>
+          <li>共 60 题，完成后用于个性化建议与开场词优化。</li>
+        </ul>
+      </div>
+      <div class="card" style="padding:18px;">
+        <div style="font-size:11px;color:var(--text-4);font-weight:700;letter-spacing:.08em;text-transform:uppercase;margin-bottom:8px;">快捷入口</div>
+        <div style="display:flex;flex-direction:column;gap:10px;">
+          <a href="/soothe" class="btn btn-ghost" style="justify-content:center;">去 AI 情绪陪伴</a>
+          <a href="/report" class="btn btn-ghost" style="justify-content:center;">查看评估报告</a>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+let mbtiQuestions=[];
+let mbtiAnswers={};
+let current=0;
+
+function renderResultBox(result){
+  const el=document.getElementById('mbti-result');
+  el.style.display='block';
+  el.innerHTML=`
+    <div style="font-size:11px;color:var(--c-primary);font-weight:700;letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px;">MBTI Result</div>
+    <div style="font-size:34px;font-weight:900;color:var(--text-1);line-height:1;">${result.mbti_type}</div>
+    <p style="margin-top:10px;font-size:14px;color:var(--text-2);line-height:1.8;">${result.description||''}</p>
+    <div style="margin-top:12px;padding:12px;border-radius:12px;background:var(--c-primary-bg);border:1px solid rgba(49,87,44,.18);font-size:13px;color:var(--text-2);line-height:1.8;">${result.coping_hint||''}</div>
+    <div style="margin-top:12px;font-size:12px;color:var(--text-3);">说明：MBTI 不参与风险等级计算，仅用于个性化建议。</div>
+  `;
+}
+
+async function loadLatestResult(){
+  const r=await fetch('/api/mbti/result');
+  const d=await r.json();
+  if(d.has_result){
+    renderResultBox(d);
+    const retakeBtn=document.getElementById('mbti-retake-btn');
+    if(retakeBtn) retakeBtn.style.display='inline-flex';
+  }
+}
+
+async function startMbti(isRetake=false){
+  if(isRetake){
+    const ok = confirm('将开始一次新的 MBTI 测试，并以本次结果作为最新人格画像。是否继续？');
+    if(!ok) return;
+  }
+  const r=await fetch('/api/mbti/questions');
+  mbtiQuestions=await r.json();
+  mbtiAnswers={};
+  current=0;
+  document.getElementById('mbti-start').style.display='none';
+  document.getElementById('mbti-quiz').style.display='block';
+  const resultEl=document.getElementById('mbti-result');
+  if(resultEl) resultEl.style.display='none';
+  renderQuestion();
+}
+
+function renderQuestion(){
+  const q=mbtiQuestions[current];
+  const host=document.getElementById('mbti-quiz');
+  const progress=Math.round(((current+1)/mbtiQuestions.length)*100);
+  host.innerHTML=`
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <div style="font-size:12px;color:var(--text-3);">第 ${current+1}/${mbtiQuestions.length} 题</div>
+      <div style="font-size:12px;color:var(--c-primary);font-weight:700;">${progress}%</div>
+    </div>
+    <div style="height:8px;background:#eef2f7;border-radius:999px;overflow:hidden;margin-bottom:18px;"><div style="height:100%;width:${progress}%;background:#4f772d;"></div></div>
+    <div style="font-size:18px;font-weight:700;color:var(--text-1);line-height:1.7;margin-bottom:18px;">第 ${q.id} 题</div>
+    <div style="display:grid;grid-template-columns:1fr;gap:10px;">
+      <button class="btn btn-primary" style="justify-content:flex-start;text-align:left;white-space:normal;line-height:1.7;" onclick="answerCurrent(1)">A. ${q.option_a}</button>
+      <button class="btn btn-ghost" style="justify-content:flex-start;text-align:left;white-space:normal;line-height:1.7;" onclick="answerCurrent(0)">B. ${q.option_b}</button>
+      ${current>0?'<button class="btn btn-ghost" onclick="goPrev()">上一题</button>':''}
+    </div>
+  `;
+}
+
+function answerCurrent(v){
+  mbtiAnswers[String(mbtiQuestions[current].id)] = v;
+  if(current < mbtiQuestions.length-1){
+    current++;
+    renderQuestion();
+    return;
+  }
+  submitMbti();
+}
+
+function goPrev(){
+  if(current<=0) return;
+  current--;
+  renderQuestion();
+}
+
+async function submitMbti(){
+  const host=document.getElementById('mbti-quiz');
+  host.innerHTML='<div style="padding:20px 0;color:var(--text-3);">正在计算人格类型...</div>';
+  const r=await fetch('/api/mbti/submit',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({answers:mbtiAnswers})
+  });
+  const d=await r.json();
+  if(!r.ok){
+    host.innerHTML='<div style="color:var(--c-red);">提交失败，请稍后重试</div>';
+    return;
+  }
+  host.style.display='none';
+  document.getElementById('mbti-start').style.display='flex';
+  const retakeBtn=document.getElementById('mbti-retake-btn');
+  if(retakeBtn) retakeBtn.style.display='inline-flex';
+  renderResultBox(d);
+}
+
+window.addEventListener('load', loadLatestResult);
+</script>
+{% endblock %}

@@ -10,7 +10,7 @@ import librosa
 import numpy as np
 import requests
 from datetime import datetime, timedelta, timezone
-from flask import Flask, render_template, request, jsonify, session, redirect, url_for, flash, Response, make_response
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for, flash, Response, make_response, send_file
 from werkzeug.security import generate_password_hash, check_password_hash
 from transformers import Wav2Vec2FeatureExtractor, Wav2Vec2ForSequenceClassification
 from functools import wraps
@@ -107,6 +107,150 @@ ARTICLE_SCENE_TAG = {
 }
 ARTICLE_DIFFICULTY = ['入门', '实用', '进阶']
 
+# --- MBTI 60题标准版题库（人格补充层，不参与风险评分） ---
+MBTI_QUESTIONS = [
+    # E / I（1-15）
+    {"id": 1, "dimension": "EI", "positive": "E", "option_a": "更喜欢社交聚会", "option_b": "更喜欢独处安静"},
+    {"id": 2, "dimension": "EI", "positive": "E", "option_a": "主动与人搭话", "option_b": "等人主动找自己"},
+    {"id": 3, "dimension": "EI", "positive": "E", "option_a": "越社交越有精力", "option_b": "独处才能恢复精力"},
+    {"id": 4, "dimension": "EI", "positive": "E", "option_a": "想法喜欢先说出来", "option_b": "想法习惯先心里想好"},
+    {"id": 5, "dimension": "EI", "positive": "E", "option_a": "喜欢热闹多人环境", "option_b": "偏爱小圈子或独自待着"},
+    {"id": 6, "dimension": "EI", "positive": "E", "option_a": "外向开朗", "option_b": "内敛慢热"},
+    {"id": 7, "dimension": "EI", "positive": "E", "option_a": "喜欢公开表达观点", "option_b": "私下才愿意说心里话"},
+    {"id": 8, "dimension": "EI", "positive": "E", "option_a": "社交中主导话题", "option_b": "社交中倾听居多"},
+    {"id": 9, "dimension": "EI", "positive": "E", "option_a": "乐于认识新朋友", "option_b": "只愿意维持熟人圈"},
+    {"id": 10, "dimension": "EI", "positive": "E", "option_a": "主动发起聊天聚会", "option_b": "被动等待邀约"},
+    {"id": 11, "dimension": "EI", "positive": "E", "option_a": "热闹场合更放松", "option_b": "独处时最放松自在"},
+    {"id": 12, "dimension": "EI", "positive": "E", "option_a": "爱分享自己的日常", "option_b": "习惯隐藏内心想法"},
+    {"id": 13, "dimension": "EI", "positive": "E", "option_a": "群体中活跃显眼", "option_b": "群体中低调旁观"},
+    {"id": 14, "dimension": "EI", "positive": "E", "option_a": "主动表达情绪想法", "option_b": "情绪习惯藏在心里"},
+    {"id": 15, "dimension": "EI", "positive": "E", "option_a": "更愿意边说边想", "option_b": "更愿意先想后说"},
+
+    # S / N（16-30）
+    {"id": 16, "dimension": "SN", "positive": "S", "option_a": "关注现实细节", "option_b": "喜欢想象未来可能"},
+    {"id": 17, "dimension": "SN", "positive": "S", "option_a": "注重亲身经历", "option_b": "偏爱灵感和联想"},
+    {"id": 18, "dimension": "SN", "positive": "S", "option_a": "做事按步骤规矩", "option_b": "喜欢跳步骤凭感觉"},
+    {"id": 19, "dimension": "SN", "positive": "S", "option_a": "看重事实、看得见的东西", "option_b": "看重寓意、背后含义"},
+    {"id": 20, "dimension": "SN", "positive": "S", "option_a": "务实稳重接地气", "option_b": "脑洞大、爱畅想规划"},
+    {"id": 21, "dimension": "SN", "positive": "S", "option_a": "关注当下生活", "option_b": "憧憬未来发展"},
+    {"id": 22, "dimension": "SN", "positive": "S", "option_a": "重视经验总结", "option_b": "喜欢探索未知新鲜事"},
+    {"id": 23, "dimension": "SN", "positive": "S", "option_a": "注重细节细节完美", "option_b": "大方向对就行不拘小节"},
+    {"id": 24, "dimension": "SN", "positive": "S", "option_a": "相信眼见为实", "option_b": "相信第六感直觉"},
+    {"id": 25, "dimension": "SN", "positive": "S", "option_a": "现实保守稳妥", "option_b": "大胆创新爱尝试"},
+    {"id": 26, "dimension": "SN", "positive": "S", "option_a": "关注具体信息", "option_b": "喜欢抽象概念理论"},
+    {"id": 27, "dimension": "SN", "positive": "S", "option_a": "一步一步按流程来", "option_b": "喜欢捷径和灵活方式"},
+    {"id": 28, "dimension": "SN", "positive": "S", "option_a": "看重实际用处", "option_b": "看重精神感受意义"},
+    {"id": 29, "dimension": "SN", "positive": "S", "option_a": "接受已有规则现实", "option_b": "想改变现状追求更好"},
+    {"id": 30, "dimension": "SN", "positive": "S", "option_a": "专注当下手头事", "option_b": "容易走神畅想别的"},
+
+    # T / F（31-45）
+    {"id": 31, "dimension": "TF", "positive": "T", "option_a": "遇事讲道理对错", "option_b": "遇事顾及他人感受"},
+    {"id": 32, "dimension": "TF", "positive": "T", "option_a": "决策靠逻辑分析", "option_b": "决策靠心情和共情"},
+    {"id": 33, "dimension": "TF", "positive": "T", "option_a": "直言不讳不怕伤人", "option_b": "说话委婉照顾情绪"},
+    {"id": 34, "dimension": "TF", "positive": "T", "option_a": "公平大于人情", "option_b": "人情大于规则"},
+    {"id": 35, "dimension": "TF", "positive": "T", "option_a": "冷静客观看问题", "option_b": "容易代入情绪共情别人"},
+    {"id": 36, "dimension": "TF", "positive": "T", "option_a": "理性冷静处事", "option_b": "心软共情很强"},
+    {"id": 37, "dimension": "TF", "positive": "T", "option_a": "就事论事不掺杂感情", "option_b": "容易被情绪左右判断"},
+    {"id": 38, "dimension": "TF", "positive": "T", "option_a": "逻辑说服别人", "option_b": "情感打动别人"},
+    {"id": 39, "dimension": "TF", "positive": "T", "option_a": "吵架讲道理对错", "option_b": "吵架更在意谁受委屈"},
+    {"id": 40, "dimension": "TF", "positive": "T", "option_a": "客观评价他人", "option_b": "容易带主观好感看人"},
+    {"id": 41, "dimension": "TF", "positive": "T", "option_a": "公事公办不讲情面", "option_b": "愿意通融照顾人情"},
+    {"id": 42, "dimension": "TF", "positive": "T", "option_a": "做决定果断不犹豫", "option_b": "做决定纠结犹豫很久"},
+    {"id": 43, "dimension": "TF", "positive": "T", "option_a": "批评对事不对人", "option_b": "害怕批评伤害别人"},
+    {"id": 44, "dimension": "TF", "positive": "T", "option_a": "说话直接简洁", "option_b": "说话委婉温柔"},
+    {"id": 45, "dimension": "TF", "positive": "T", "option_a": "原则大于妥协", "option_b": "容易为别人妥协让步"},
+
+    # J / P（46-60）
+    {"id": 46, "dimension": "JP", "positive": "J", "option_a": "喜欢提前计划安排", "option_b": "喜欢随性灵活随缘"},
+    {"id": 47, "dimension": "JP", "positive": "J", "option_a": "做事喜欢有结果定论", "option_b": "喜欢保留选择不着急定"},
+    {"id": 48, "dimension": "JP", "positive": "J", "option_a": "讨厌临时变动", "option_b": "适应突发变化"},
+    {"id": 49, "dimension": "JP", "positive": "J", "option_a": "生活规律有条理", "option_b": "生活随性不喜欢拘束"},
+    {"id": 50, "dimension": "JP", "positive": "J", "option_a": "做完一件再做下一件", "option_b": "习惯同时摸好几件事"},
+    {"id": 51, "dimension": "JP", "positive": "J", "option_a": "做事有计划不拖拉", "option_b": "习惯拖延临时冲刺"},
+    {"id": 52, "dimension": "JP", "positive": "J", "option_a": "喜欢确定安稳", "option_b": "喜欢多变新鲜感"},
+    {"id": 53, "dimension": "JP", "positive": "J", "option_a": "安排好日程再行动", "option_b": "走到哪算哪随心来"},
+    {"id": 54, "dimension": "JP", "positive": "J", "option_a": "习惯提前做完事", "option_b": "截止日期前才有动力"},
+    {"id": 55, "dimension": "JP", "positive": "J", "option_a": "做事严谨有条理", "option_b": "做事灵活随性"},
+    {"id": 56, "dimension": "JP", "positive": "J", "option_a": "喜欢稳定不变", "option_b": "厌烦一成不变"},
+    {"id": 57, "dimension": "JP", "positive": "J", "option_a": "把生活安排得井井有条", "option_b": "生活随意随性自在"},
+    {"id": 58, "dimension": "JP", "positive": "J", "option_a": "不喜欢临时突发安排", "option_b": "不排斥临时改变计划"},
+    {"id": 59, "dimension": "JP", "positive": "J", "option_a": "东西摆放整齐固定", "option_b": "东西随手放不拘束"},
+    {"id": 60, "dimension": "JP", "positive": "J", "option_a": "喜欢有规划的人生", "option_b": "喜欢充满未知的人生"},
+]
+
+MBTI_TYPE_DESC = {
+    "INTJ": "理性规划，擅长独立思考与长期目标管理。",
+    "INTP": "好奇分析，重视概念清晰与逻辑推演。",
+    "ENTJ": "目标驱动，善于组织资源并推进执行。",
+    "ENTP": "创意探索，善于发散与快速试错。",
+    "INFJ": "洞察细腻，关注意义与长期影响。",
+    "INFP": "价值导向，重视真实感受与内在一致。",
+    "ENFJ": "共情协调，擅长激励与关系整合。",
+    "ENFP": "热情灵活，善于连接人和新可能。",
+    "ISTJ": "稳健可靠，注重规则与责任落实。",
+    "ISFJ": "耐心务实，擅长支持与细节照护。",
+    "ESTJ": "结果导向，重视秩序与效率。",
+    "ESFJ": "协作友好，关注团队氛围与执行。",
+    "ISTP": "冷静实操，偏好先动手后优化。",
+    "ISFP": "敏感务实，重体验与当下感受。",
+    "ESTP": "行动迅速，擅长应变与现场决策。",
+    "ESFP": "外向感染，偏好互动与即时反馈。",
+}
+
+MBTI_COPING_HINTS = {
+    "I": "在压力期可保留短时独处恢复，但建议设置固定外界支持窗口（如每周一次深聊）。",
+    "E": "压力期可优先采用“与人连接型”调节，如伙伴运动、同伴复盘。",
+    "N": "焦虑时可将抽象担忧落地为“可执行清单”，降低过度脑补。",
+    "S": "可通过可观测的小步骤推进，建立稳定掌控感。",
+    "T": "建议用结构化记录（问题-证据-对策）减少反复内耗。",
+    "F": "建议先命名感受，再做决策，兼顾情绪与事实。",
+    "J": "保持计划优势的同时，为不可控事件预留弹性缓冲。",
+    "P": "保留灵活性的同时，设置关键里程碑避免拖延累积。",
+}
+
+def calculate_mbti_type(answer_map):
+    scores = {"E": 0, "I": 0, "S": 0, "N": 0, "T": 0, "F": 0, "J": 0, "P": 0}
+    question_index = {q["id"]: q for q in MBTI_QUESTIONS}
+
+    for qid_str, val in (answer_map or {}).items():
+        try:
+            qid = int(qid_str)
+            v = int(val)
+        except Exception:
+            continue
+        if v not in (0, 1):
+            continue
+        q = question_index.get(qid)
+        if not q:
+            continue
+        positive = q["positive"]
+        pair = q["dimension"]
+        negative = pair[1] if pair[0] == positive else pair[0]
+        chosen = positive if v == 1 else negative
+        scores[chosen] += 1
+
+    mbti = ''.join([
+        'E' if scores['E'] >= scores['I'] else 'I',
+        'S' if scores['S'] >= scores['N'] else 'N',
+        'T' if scores['T'] >= scores['F'] else 'F',
+        'J' if scores['J'] >= scores['P'] else 'P',
+    ])
+
+    hints = [
+        MBTI_COPING_HINTS.get(mbti[0], ''),
+        MBTI_COPING_HINTS.get(mbti[1], ''),
+        MBTI_COPING_HINTS.get(mbti[2], ''),
+        MBTI_COPING_HINTS.get(mbti[3], ''),
+    ]
+
+    return {
+        "mbti_type": mbti,
+        "scores": scores,
+        "description": MBTI_TYPE_DESC.get(mbti, "人格倾向用于个性化建议，不用于风险判定。"),
+        "coping_hint": ' '.join([h for h in hints if h])
+    }
+
+
 
 def enrich_article_cards(rows):
     items = []
@@ -192,6 +336,38 @@ def login_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
+
+def is_admin_session():
+    return session.get('role') == 'admin'
+
+
+def admin_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            return redirect(url_for('login'))
+        if not is_admin_session():
+            if request.path.startswith('/api/'):
+                return jsonify({'error': '无管理员权限'}), 403
+            return redirect(url_for('index'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+
+def write_admin_audit_log(admin_id, admin_name, action, target_type, target_id, reason=''):
+    conn = get_db_connection()
+    try:
+        conn.execute(
+            '''
+            INSERT INTO admin_audit_logs (admin_id, admin_name, action, target_type, target_id, reason, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''',
+            (admin_id, admin_name, action, target_type, target_id, reason, beijing_timestamp_str())
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
 # --- 1. 语音模型核心集成 ---
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 MODEL_PATH = Config.MODEL_DIR
@@ -209,7 +385,9 @@ class DepressionVoiceModel:
 
     def predict(self, file_path):
         try:
-            speech, _ = librosa.load(file_path, sr=16000)
+            speech, _ = librosa.load(file_path, sr=16000, mono=True)
+            if speech is None or len(speech) < 1600:
+                raise ValueError("audio_too_short_or_empty")
             inputs = self.feature_extractor(speech, sampling_rate=16000, return_tensors="pt", padding=True)
             input_values = inputs.input_values.to(DEVICE)
 
@@ -223,7 +401,7 @@ class DepressionVoiceModel:
             print(f"语音推理完成: Label={prediction}, Confidence={confidence:.2%}")
             return prediction, confidence
         except Exception as e:
-            print(f"语音推理出错: {e}")
+            print(f"语音推理出错: {repr(e)}")
             return 0, 0.0
 
 # 实例化全局模型对象
@@ -286,6 +464,9 @@ def init_db():
         user_columns = [info[1] for info in cursor.fetchall()]
         if 'password' not in user_columns:
             conn.execute('ALTER TABLE users ADD COLUMN password TEXT NOT NULL DEFAULT ""')
+        if 'role' not in user_columns:
+            conn.execute("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'")
+            print('users 表已添加 role 字段')
 
         # 5. 检查并初始化题目数据（如果题目表为空）
         cursor = conn.execute('SELECT COUNT(*) FROM questions')
@@ -484,11 +665,14 @@ def init_db():
                 created_at TIMESTAMP DEFAULT (datetime('now', '+8 hours'))
             )
         ''')
-        # 迁移：为旧数据库动态补充 image_path 字段
+        # 迁移：为旧数据库动态补充社区治理字段
         existing_cols = [row[1] for row in conn.execute('PRAGMA table_info(posts)').fetchall()]
         if 'image_path' not in existing_cols:
             conn.execute('ALTER TABLE posts ADD COLUMN image_path TEXT')
             print('posts 表已添加 image_path 字段')
+        if 'is_hidden' not in existing_cols:
+            conn.execute('ALTER TABLE posts ADD COLUMN is_hidden INTEGER NOT NULL DEFAULT 0')
+            print('posts 表已添加 is_hidden 字段')
         
         # 9. 创建帖子点赞表
         conn.execute('''
@@ -513,7 +697,45 @@ def init_db():
             )
         ''')
         
-        # 11. 创建对话历史表
+        # 评论治理字段迁移
+        comment_cols = [row[1] for row in conn.execute('PRAGMA table_info(post_comments)').fetchall()]
+        if 'is_hidden' not in comment_cols:
+            conn.execute('ALTER TABLE post_comments ADD COLUMN is_hidden INTEGER NOT NULL DEFAULT 0')
+            print('post_comments 表已添加 is_hidden 字段')
+
+        # 11. 创建管理员审计日志表
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS admin_audit_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                admin_id INTEGER NOT NULL,
+                admin_name TEXT,
+                action TEXT NOT NULL,
+                target_type TEXT NOT NULL,
+                target_id INTEGER NOT NULL,
+                reason TEXT,
+                created_at TIMESTAMP DEFAULT (datetime('now', '+8 hours'))
+            )
+        ''')
+
+        # 11.5 风险用户关注表（管理员关注高风险个体）
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS risk_watchlist (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                admin_id INTEGER NOT NULL,
+                record_id INTEGER NOT NULL,
+                watch_note TEXT,
+                created_at TIMESTAMP DEFAULT (datetime('now', '+8 hours')),
+                updated_at TIMESTAMP DEFAULT (datetime('now', '+8 hours')),
+                UNIQUE(admin_id, record_id)
+            )
+        ''')
+        watch_cols = [row[1] for row in conn.execute('PRAGMA table_info(risk_watchlist)').fetchall()]
+        if 'watch_note' not in watch_cols:
+            conn.execute('ALTER TABLE risk_watchlist ADD COLUMN watch_note TEXT')
+        if 'updated_at' not in watch_cols:
+            conn.execute('ALTER TABLE risk_watchlist ADD COLUMN updated_at TIMESTAMP DEFAULT (datetime(\'now\', \'+8 hours\'))')
+
+        # 12. 创建对话历史表
         conn.execute('''
             CREATE TABLE IF NOT EXISTS dialogue_history (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -685,16 +907,14 @@ def init_db():
             ''', sample_questions)
             print(f"语音采集问题初始化完成！共 {len(sample_questions)} 个问题。")
         
-        # 15. 创建语音记录表
+        # 16. 创建 MBTI 结果表（人格补充层，不参与风险评分）
         conn.execute('''
-            CREATE TABLE IF NOT EXISTS voice_records (
+            CREATE TABLE IF NOT EXISTS mbti_results (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER,
-                module_type TEXT NOT NULL,
-                file_path TEXT,
-                transcription TEXT,
-                emotion_result TEXT,
-                duration INTEGER,
+                mbti_type TEXT NOT NULL,
+                answers_json TEXT,
+                scores_json TEXT,
                 created_at TIMESTAMP DEFAULT (datetime('now', '+8 hours'))
             )
         ''')
@@ -710,7 +930,7 @@ def init_db():
             conn.execute('CREATE INDEX IF NOT EXISTS idx_post_comments_post_id ON post_comments(post_id)')
             conn.execute('CREATE INDEX IF NOT EXISTS idx_dialogue_user_id ON dialogue_history(user_id)')
             conn.execute('CREATE INDEX IF NOT EXISTS idx_dialogue_conversation_id ON dialogue_history(conversation_id)')
-            conn.execute('CREATE INDEX IF NOT EXISTS idx_dialogue_user_emotion_label ON dialogue_history(user_id, emotion_label)')
+            conn.execute('CREATE INDEX IF NOT EXISTS idx_mbti_user_id ON mbti_results(user_id)')
             print("[DB] 数据库索引创建完成")
         except Exception as e:
             print(f"[DB] 索引创建跳过: {e}")
@@ -739,13 +959,24 @@ def login():
     if request.method == 'POST':
         username = request.form.get('username')
         password = request.form.get('password')
+        login_type = (request.form.get('login_type') or 'user').strip().lower()
+
         conn = get_db_connection()
         user = conn.execute('SELECT * FROM users WHERE username = ?', (username,)).fetchone()
         conn.close()
+
         if user and check_password_hash(user['password'], password):
+            user_role = (user['role'] if 'role' in user.keys() else 'user') or 'user'
+            if login_type == 'admin' and user_role != 'admin':
+                flash('该账号不是管理员账号')
+                return render_template('login.html')
+
             session['user_id'] = user['id']
             session['username'] = user['username']
+            session['role'] = user_role
             # 登录成功，跳转到首页并传递登录成功参数
+            if login_type == 'admin' and user_role == 'admin':
+                return redirect(url_for('admin_dashboard'))
             return redirect(url_for('index', login_success='true'))
         flash('用户名或密码错误')
     return render_template('login.html')
@@ -798,8 +1029,130 @@ def detect(): return render_template('detect.html')
 @login_required
 def report(): return render_template('report.html')
 
+@app.route('/mbti')
+@login_required
+def mbti_page():
+    return render_template('mbti.html')
+
+@app.route('/api/mbti/questions')
+@login_required
+def api_mbti_questions():
+    return jsonify([
+        {
+            "id": q["id"],
+            "dimension": q["dimension"],
+            "option_a": q["option_a"],
+            "option_b": q["option_b"]
+        }
+        for q in MBTI_QUESTIONS
+    ])
+
+@app.route('/api/mbti/submit', methods=['POST'])
+@login_required
+def api_mbti_submit():
+    try:
+        payload = request.get_json(silent=True) or {}
+        answers = payload.get('answers') or {}
+        if not isinstance(answers, dict):
+            return jsonify({"error": "answers 格式错误"}), 400
+
+        result = calculate_mbti_type(answers)
+        conn = get_db_connection()
+        try:
+            conn.execute(
+                '''
+                INSERT INTO mbti_results (user_id, mbti_type, answers_json, scores_json, created_at)
+                VALUES (?, ?, ?, ?, ?)
+                ''',
+                (
+                    session.get('user_id'),
+                    result['mbti_type'],
+                    json.dumps(answers, ensure_ascii=False),
+                    json.dumps(result['scores'], ensure_ascii=False),
+                    beijing_timestamp_str()
+                )
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        return jsonify({"success": True, **result})
+    except Exception as e:
+        log_error(e, context='api_mbti_submit')
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/mbti/result')
+@login_required
+def api_mbti_result():
+    conn = get_db_connection()
+    try:
+        row = conn.execute(
+            '''
+            SELECT * FROM mbti_results
+            WHERE user_id = ?
+            ORDER BY created_at DESC, id DESC
+            LIMIT 1
+            ''',
+            (session.get('user_id'),)
+        ).fetchone()
+    finally:
+        conn.close()
+
+    if not row:
+        return jsonify({"has_result": False})
+
+    scores = {}
+    try:
+        scores = json.loads(row['scores_json'] or '{}')
+    except Exception:
+        scores = {}
+
+    return jsonify({
+        "has_result": True,
+        "mbti_type": row['mbti_type'],
+        "scores": scores,
+        "description": MBTI_TYPE_DESC.get(row['mbti_type'], "人格倾向用于个性化建议，不用于风险判定。"),
+        "coping_hint": ' '.join([
+            MBTI_COPING_HINTS.get(row['mbti_type'][0], ''),
+            MBTI_COPING_HINTS.get(row['mbti_type'][1], ''),
+            MBTI_COPING_HINTS.get(row['mbti_type'][2], ''),
+            MBTI_COPING_HINTS.get(row['mbti_type'][3], ''),
+        ]).strip(),
+        "created_at": row['created_at']
+    })
+
 @app.route('/soothe')
-def soothe(): return render_template('soothe.html')
+def soothe():
+    starter = "你好。我是心愈。检测结果只是一个数字，如果你现在觉得压力大、委屈或者单纯想发呆，都可以告诉我。我会在这里一直陪着你。"
+    user_id = session.get('user_id')
+    if user_id:
+        conn = get_db_connection()
+        try:
+            row = conn.execute(
+                '''
+                SELECT mbti_type
+                FROM mbti_results
+                WHERE user_id = ?
+                ORDER BY created_at DESC, id DESC
+                LIMIT 1
+                ''',
+                (user_id,)
+            ).fetchone()
+        finally:
+            conn.close()
+
+        if row and row['mbti_type']:
+            mbti = row['mbti_type']
+            mbti_desc = MBTI_TYPE_DESC.get(mbti, '你有自己稳定的人格节奏。')
+            mbti_hint = ' '.join([
+                MBTI_COPING_HINTS.get(mbti[0], ''),
+                MBTI_COPING_HINTS.get(mbti[1], ''),
+                MBTI_COPING_HINTS.get(mbti[2], ''),
+                MBTI_COPING_HINTS.get(mbti[3], ''),
+            ]).strip()
+            starter = f"你好，我看到你的人格倾向是 {mbti}。{mbti_desc} 如果你愿意，我们可以从今天最困扰你的一件事开始聊。{mbti_hint}"
+
+    return render_template('soothe.html', soothe_starter=starter)
 
 @app.route('/profile')
 def profile(): 
@@ -1332,16 +1685,17 @@ def get_posts():
 
         conn = get_db_connection()
 
-        # 获取总数
-        total_count = conn.execute('SELECT COUNT(*) FROM posts').fetchone()[0]
+        # 获取总数（仅展示未隐藏）
+        total_count = conn.execute('SELECT COUNT(*) FROM posts WHERE is_hidden = 0').fetchone()[0]
 
         # 获取当前页数据
         posts = conn.execute('''
             SELECT p.*,
                    (SELECT COUNT(*) FROM post_likes WHERE post_id = p.id) as like_count,
-                   (SELECT COUNT(*) FROM post_comments WHERE post_id = p.id) as comment_count,
+                   (SELECT COUNT(*) FROM post_comments WHERE post_id = p.id AND is_hidden = 0) as comment_count,
                    CASE WHEN ? > 0 AND (SELECT COUNT(*) FROM post_likes WHERE post_id = p.id AND user_id = ?) > 0 THEN 1 ELSE 0 END as liked
             FROM posts p
+            WHERE p.is_hidden = 0
             ORDER BY p.created_at DESC
             LIMIT ? OFFSET ?
         ''', (session.get('user_id', 0), session.get('user_id', 0), page_size, offset)).fetchall()
@@ -1400,9 +1754,9 @@ def get_comments(post_id):
         conn = get_db_connection()
         comments = conn.execute('''
             SELECT c.*, 
-                   (SELECT COUNT(*) FROM post_comments WHERE post_id = c.post_id) as comment_count
+                   (SELECT COUNT(*) FROM post_comments WHERE post_id = c.post_id AND is_hidden = 0) as comment_count
             FROM post_comments c
-            WHERE c.post_id = ?
+            WHERE c.post_id = ? AND c.is_hidden = 0
             ORDER BY c.created_at ASC
         ''', (post_id,)).fetchall()
         conn.close()
@@ -1433,7 +1787,10 @@ def add_comment(post_id):
             return jsonify({"error": "评论含有违规词汇，请修改后发布", "hit_count": len(words)}), 400
         
         user_id = session['user_id']
-        username = session.get('username', '匿名用户')
+
+        # 评论也使用匿名昵称，避免暴露真实用户名
+        anonymous_names = ['倾听者', '阳光小伙伴', '心灵旅者', '温暖的人', '努力的人', '勇敢的心', '微笑面对', '宁静致远', '追光者', '破晓']
+        anonymous_name = random.choice(anonymous_names) + str(random.randint(1, 999))
         
         conn = get_db_connection()
         # 检查帖子是否存在
@@ -1445,14 +1802,14 @@ def add_comment(post_id):
         cursor = conn.execute('''
             INSERT INTO post_comments (post_id, user_id, anonymous_name, content, created_at)
             VALUES (?, ?, ?, ?, ?)
-        ''', (post_id, user_id, username, content, beijing_timestamp_str()))
+        ''', (post_id, user_id, anonymous_name, content, beijing_timestamp_str()))
         conn.commit()
         
         # 获取刚插入的评论
         comment = conn.execute('SELECT * FROM post_comments WHERE id = ?', (cursor.lastrowid,)).fetchone()
         conn.close()
         
-        log_user_action('add_comment', username=username, details=f"post_id={post_id}")
+        log_user_action('add_comment', username=session.get('username'), details=f"post_id={post_id}")
         return jsonify({"success": True, "comment": dict(comment)})
     except Exception as e:
         log_error(e, context="add_comment")
@@ -1533,6 +1890,894 @@ def delete_post(post_id):
         log_error(e, context=f"delete_post|post_id={post_id}")
         return jsonify({"error": str(e)}), 500
 
+@app.route('/admin')
+@admin_required
+def admin_dashboard():
+    return render_template('admin.html')
+
+
+@app.route('/admin/download-db', methods=['GET'])
+@admin_required
+def download_db():
+    if not os.path.exists(DB_PATH):
+        return jsonify({'error': '数据库文件不存在'}), 404
+    return send_file(DB_PATH, as_attachment=True, download_name='database.db')
+
+
+@app.route('/admin/upload-db', methods=['POST'])
+@admin_required
+def upload_db():
+    if 'db_file' not in request.files:
+        flash('请选择数据库文件')
+        return redirect(url_for('admin_dashboard'))
+
+    file = request.files['db_file']
+    if file.filename == '':
+        flash('请选择数据库文件')
+        return redirect(url_for('admin_dashboard'))
+
+    if not file.filename.lower().endswith('.db'):
+        flash('只能上传 .db 格式数据库文件')
+        return redirect(url_for('admin_dashboard'))
+
+    tmp_path = DB_PATH + '.upload_tmp'
+    backup_path = DB_PATH + '.bak'
+
+    try:
+        file.save(tmp_path)
+        # 先做一次备份，再覆盖
+        if os.path.exists(DB_PATH):
+            shutil.copy2(DB_PATH, backup_path)
+        os.replace(tmp_path, DB_PATH)
+        flash('数据库上传并覆盖成功（已自动备份旧库到 .bak）')
+    except Exception as e:
+        try:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+        except Exception:
+            pass
+        flash(f'上传失败：{str(e)}')
+
+    return redirect(url_for('admin_dashboard'))
+
+
+@app.route('/api/admin/stats')
+@admin_required
+def admin_stats():
+    conn = get_db_connection()
+    try:
+        total_users = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+        total_assessments = conn.execute("SELECT COUNT(*) FROM records").fetchone()[0]
+        high_risk_users = conn.execute("SELECT COUNT(*) FROM records WHERE risk_level IN ('HIGH','CRITICAL','高风险')").fetchone()[0]
+        today = beijing_date_str()
+        today_active = conn.execute(
+            "SELECT COUNT(DISTINCT user_id) FROM records WHERE user_id IS NOT NULL AND created_at LIKE ?",
+            (today + '%',)
+        ).fetchone()[0]
+
+        risk_distribution_rows = conn.execute(
+            "SELECT risk_level, COUNT(*) as c FROM records GROUP BY risk_level"
+        ).fetchall()
+        risk_distribution = {"LOW": 0, "MEDIUM": 0, "HIGH": 0, "CRITICAL": 0}
+        for r in risk_distribution_rows:
+            level = (r['risk_level'] or '').upper()
+            if level in ['高风险']:
+                level = 'HIGH'
+            elif level in ['中等风险']:
+                level = 'MEDIUM'
+            elif level in ['低风险']:
+                level = 'LOW'
+            if level in risk_distribution:
+                risk_distribution[level] += int(r['c'])
+
+        trend_rows = conn.execute(
+            """
+            SELECT substr(created_at, 1, 10) as d,
+                   COUNT(*) as total,
+                   SUM(CASE WHEN risk_level IN ('HIGH','CRITICAL','高风险') THEN 1 ELSE 0 END) as high
+            FROM records
+            GROUP BY substr(created_at, 1, 10)
+            ORDER BY d DESC
+            LIMIT 7
+            """
+        ).fetchall()
+        trend = [dict(r) for r in reversed(trend_rows)]
+
+        mbti_rows = conn.execute(
+            """
+            SELECT mr.mbti_type, COUNT(*) AS c
+            FROM mbti_results mr
+            INNER JOIN (
+                SELECT user_id, MAX(id) AS max_id
+                FROM mbti_results
+                WHERE user_id IS NOT NULL
+                GROUP BY user_id
+            ) latest ON latest.user_id = mr.user_id AND latest.max_id = mr.id
+            WHERE mr.mbti_type IS NOT NULL AND trim(mr.mbti_type) <> ''
+            GROUP BY mr.mbti_type
+            ORDER BY c DESC
+            """
+        ).fetchall()
+        mbti_distribution = [{"type": r['mbti_type'], "count": int(r['c'])} for r in mbti_rows]
+
+        return jsonify({
+            "total_users": total_users,
+            "today_active": today_active,
+            "total_assessments": total_assessments,
+            "high_risk_users": high_risk_users,
+            "risk_distribution": risk_distribution,
+            "trend_7d": trend,
+            "mbti_distribution": mbti_distribution
+        })
+    finally:
+        conn.close()
+
+
+@app.route('/api/admin/risk-users')
+@admin_required
+def admin_risk_users():
+    level = (request.args.get('level') or '').strip().upper()
+    watch_only = (request.args.get('watch_only') or 'false').lower() == 'true'
+    page = max(1, int(request.args.get('page', 1) or 1))
+    page_size = min(50, max(1, int(request.args.get('page_size', 10) or 10)))
+    offset = (page - 1) * page_size
+
+    conn = get_db_connection()
+    try:
+        where = "(r.risk_level IN ('HIGH','CRITICAL','高风险') OR r.phq_score >= 15)"
+        params = []
+        if level == 'HIGH':
+            where += " AND (upper(r.risk_level) = 'HIGH' OR r.risk_level = '高风险')"
+        elif level == 'CRITICAL':
+            where += " AND upper(r.risk_level) = 'CRITICAL'"
+        if watch_only:
+            where += " AND rw.id IS NOT NULL"
+
+        total = conn.execute(
+            f"""
+            SELECT COUNT(*)
+            FROM records r
+            LEFT JOIN risk_watchlist rw ON rw.record_id = r.id AND rw.admin_id = ?
+            WHERE {where}
+            """,
+            tuple([session['user_id']] + params)
+        ).fetchone()[0]
+
+        rows = conn.execute(
+            f"""
+            SELECT r.*, u.username,
+                   CASE WHEN rw.id IS NULL THEN 0 ELSE 1 END AS is_watched,
+                   rw.created_at AS watched_at,
+                   rw.watch_note AS watch_note
+            FROM records r
+            LEFT JOIN users u ON u.id = r.user_id
+            LEFT JOIN risk_watchlist rw ON rw.record_id = r.id AND rw.admin_id = ?
+            WHERE {where}
+            ORDER BY r.created_at DESC
+            LIMIT ? OFFSET ?
+            """,
+            tuple([session['user_id']] + params + [page_size, offset])
+        ).fetchall()
+
+        result = []
+        for r in rows:
+            phq_norm = round((r['phq_score'] or 0) / 27.0, 4)
+            anx_norm = round((r['anxiety_score'] or 0) / 21.0, 4)
+            stress_norm = round((r['pressure_score'] or 0) / 12.0, 4)
+            inter_norm = round((r['social_score'] or 0) / 9.0, 4)
+            self_inv = round(1.0 - min(1.0, (r['self_score'] or 0) / 9.0), 4)
+            sleep_norm = round((r['sleep_score'] or 0) / 12.0, 4)
+            risk_score = round(min(1.0, max(phq_norm, anx_norm)), 4)
+            source = "量表主导" if phq_norm >= 0.6 else "多模态主导"
+            explanation = []
+            if phq_norm >= 0.6:
+                explanation.append("PHQ-9 得分较高")
+            if anx_norm >= 0.6:
+                explanation.append("焦虑维度偏高")
+            if stress_norm >= 0.6:
+                explanation.append("压力维度偏高")
+            if not explanation:
+                explanation.append("综合信号提示需持续观察")
+            item = {
+                "record_id": r['id'],
+                "user_id": r['user_id'],
+                "username": r['username'] or f"用户{r['user_id']}",
+                "risk_score": risk_score,
+                "risk_level": r['risk_level'],
+                "source": source,
+                "updated_at": r['created_at'],
+                "is_watched": int(r['is_watched']) == 1,
+                "watched_at": r['watched_at'],
+                "watch_note": r['watch_note'] or '',
+                "radar": {
+                    "depression": phq_norm,
+                    "anxiety": anx_norm,
+                    "stress": stress_norm,
+                    "interpersonal": inter_norm,
+                    "self_esteem_risk": self_inv,
+                    "sleep": sleep_norm
+                },
+                "weights": {
+                    "text": 0.33,
+                    "speech": round(min(1.0, (r['voice_confidence'] or 0.0)), 2),
+                    "face": 0.33
+                },
+                "explanation": "；".join(explanation),
+                "phq_score": r['phq_score'],
+                "anxiety_score": r['anxiety_score']
+            }
+            result.append(item)
+        return jsonify({
+            'items': result,
+            'page': page,
+            'page_size': page_size,
+            'total': total
+        })
+    finally:
+        conn.close()
+
+
+@app.route('/api/admin/risk-users/<int:record_id>/watch', methods=['POST'])
+@admin_required
+def admin_watch_risk_user(record_id):
+    payload = request.get_json(silent=True) or {}
+    watch_note = (payload.get('watch_note') or '').strip()
+    conn = get_db_connection()
+    try:
+        row = conn.execute('SELECT id FROM records WHERE id = ?', (record_id,)).fetchone()
+        if not row:
+            return jsonify({'error': '记录不存在'}), 404
+
+        existing = conn.execute(
+            'SELECT id FROM risk_watchlist WHERE admin_id = ? AND record_id = ?',
+            (session['user_id'], record_id)
+        ).fetchone()
+
+        now_ts = beijing_timestamp_str()
+        if existing:
+            conn.execute(
+                'UPDATE risk_watchlist SET watch_note = ?, updated_at = ? WHERE admin_id = ? AND record_id = ?',
+                (watch_note, now_ts, session['user_id'], record_id)
+            )
+        else:
+            conn.execute(
+                'INSERT INTO risk_watchlist (admin_id, record_id, watch_note, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
+                (session['user_id'], record_id, watch_note, now_ts, now_ts)
+            )
+        conn.commit()
+    finally:
+        conn.close()
+    write_admin_audit_log(session['user_id'], session.get('username', ''), 'watch', 'risk_record', record_id, watch_note or '标记关注')
+    return jsonify({'success': True, 'is_watched': True, 'watch_note': watch_note, 'watched_at': now_ts})
+
+
+@app.route('/api/admin/risk-users/<int:record_id>/unwatch', methods=['POST'])
+@admin_required
+def admin_unwatch_risk_user(record_id):
+    conn = get_db_connection()
+    try:
+        conn.execute(
+            'DELETE FROM risk_watchlist WHERE admin_id = ? AND record_id = ?',
+            (session['user_id'], record_id)
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    write_admin_audit_log(session['user_id'], session.get('username', ''), 'unwatch', 'risk_record', record_id, '取消关注')
+    return jsonify({'success': True, 'is_watched': False, 'watch_note': '', 'watched_at': None})
+
+
+@app.route('/api/admin/risk-users/<int:record_id>')
+@admin_required
+def admin_risk_user_detail(record_id):
+    conn = get_db_connection()
+    try:
+        r = conn.execute(
+            """
+            SELECT r.*, u.username,
+                   CASE WHEN rw.id IS NULL THEN 0 ELSE 1 END AS is_watched,
+                   rw.created_at AS watched_at,
+                   rw.watch_note AS watch_note
+            FROM records r
+            LEFT JOIN users u ON u.id = r.user_id
+            LEFT JOIN risk_watchlist rw ON rw.record_id = r.id AND rw.admin_id = ?
+            WHERE r.id = ?
+            """,
+            (session['user_id'], record_id)
+        ).fetchone()
+        if not r:
+            return jsonify({'error': '记录不存在'}), 404
+
+        history = conn.execute(
+            """
+            SELECT id, phq_score, anxiety_score, created_at
+            FROM records
+            WHERE user_id = ?
+            ORDER BY created_at DESC
+            LIMIT 10
+            """,
+            (r['user_id'],)
+        ).fetchall() if r['user_id'] else []
+
+        phq_norm = round((r['phq_score'] or 0) / 27.0, 4)
+        anx_norm = round((r['anxiety_score'] or 0) / 21.0, 4)
+        stress_norm = round((r['pressure_score'] or 0) / 12.0, 4)
+        inter_norm = round((r['social_score'] or 0) / 9.0, 4)
+        self_inv = round(1.0 - min(1.0, (r['self_score'] or 0) / 9.0), 4)
+        sleep_norm = round((r['sleep_score'] or 0) / 12.0, 4)
+
+        return jsonify({
+            'record_id': r['id'],
+            'username': r['username'] or f"用户{r['user_id']}",
+            'risk_level': r['risk_level'],
+            'risk_score': round(min(1.0, max(phq_norm, anx_norm)), 4),
+            'is_watched': int(r['is_watched']) == 1,
+            'watched_at': r['watched_at'],
+            'watch_note': r['watch_note'] or '',
+            'radar': {
+                'depression': phq_norm,
+                'anxiety': anx_norm,
+                'stress': stress_norm,
+                'interpersonal': inter_norm,
+                'self_esteem_risk': self_inv,
+                'sleep': sleep_norm
+            },
+            'weights': {
+                'text': 0.33,
+                'speech': round(min(1.0, (r['voice_confidence'] or 0.0)), 2),
+                'face': 0.33
+            },
+            'explanation': '语音情绪波动较大；PHQ-9得分较高；面部表情低落（如有）',
+            'history': [dict(x) for x in reversed(history)]
+        })
+    finally:
+        conn.close()
+
+
+@app.route('/api/admin/posts')
+@admin_required
+def admin_posts():
+    page = int(request.args.get('page', 1) or 1)
+    page_size = min(50, max(1, int(request.args.get('page_size', 10) or 10)))
+    keyword = (request.args.get('keyword') or '').strip()
+    offset = (page - 1) * page_size
+
+    conn = get_db_connection()
+    try:
+        where = '1=1'
+        params = []
+        if keyword:
+            where += ' AND p.content LIKE ?'
+            params.append(f"%{keyword}%")
+
+        total = conn.execute(f"SELECT COUNT(*) FROM posts p WHERE {where}", tuple(params)).fetchone()[0]
+        rows = conn.execute(
+            f"""
+            SELECT p.*, u.username
+            FROM posts p
+            LEFT JOIN users u ON u.id = p.user_id
+            WHERE {where}
+            ORDER BY p.created_at DESC
+            LIMIT ? OFFSET ?
+            """,
+            tuple(params + [page_size, offset])
+        ).fetchall()
+
+        return jsonify({
+            "items": [dict(r) for r in rows],
+            "page": page,
+            "page_size": page_size,
+            "total": total
+        })
+    finally:
+        conn.close()
+
+
+@app.route('/api/admin/comments')
+@admin_required
+def admin_comments():
+    page = int(request.args.get('page', 1) or 1)
+    page_size = min(50, max(1, int(request.args.get('page_size', 10) or 10)))
+    keyword = (request.args.get('keyword') or '').strip()
+    offset = (page - 1) * page_size
+
+    conn = get_db_connection()
+    try:
+        where = '1=1'
+        params = []
+        if keyword:
+            where += ' AND c.content LIKE ?'
+            params.append(f"%{keyword}%")
+
+        total = conn.execute(f"SELECT COUNT(*) FROM post_comments c WHERE {where}", tuple(params)).fetchone()[0]
+        rows = conn.execute(
+            f"""
+            SELECT c.*, p.content as post_content, u.username
+            FROM post_comments c
+            LEFT JOIN posts p ON p.id = c.post_id
+            LEFT JOIN users u ON u.id = c.user_id
+            WHERE {where}
+            ORDER BY c.created_at DESC
+            LIMIT ? OFFSET ?
+            """,
+            tuple(params + [page_size, offset])
+        ).fetchall()
+
+        return jsonify({"items": [dict(r) for r in rows], "page": page, "page_size": page_size, "total": total})
+    finally:
+        conn.close()
+
+
+@app.route('/api/admin/posts/<int:post_id>/hide', methods=['POST'])
+@admin_required
+def admin_hide_post(post_id):
+    reason = (request.get_json(silent=True) or {}).get('reason', '').strip()
+    if not reason:
+        return jsonify({'error': '请填写操作原因'}), 400
+    conn = get_db_connection()
+    try:
+        row = conn.execute('SELECT id FROM posts WHERE id = ?', (post_id,)).fetchone()
+        if not row:
+            return jsonify({'error': '帖子不存在'}), 404
+        conn.execute('UPDATE posts SET is_hidden = 1 WHERE id = ?', (post_id,))
+        conn.commit()
+    finally:
+        conn.close()
+    write_admin_audit_log(session['user_id'], session.get('username', ''), 'hide', 'post', post_id, reason)
+    return jsonify({'success': True})
+
+
+@app.route('/api/admin/posts/<int:post_id>/restore', methods=['POST'])
+@admin_required
+def admin_restore_post(post_id):
+    reason = (request.get_json(silent=True) or {}).get('reason', '').strip()
+    if not reason:
+        return jsonify({'error': '请填写操作原因'}), 400
+    conn = get_db_connection()
+    try:
+        row = conn.execute('SELECT id FROM posts WHERE id = ?', (post_id,)).fetchone()
+        if not row:
+            return jsonify({'error': '帖子不存在'}), 404
+        conn.execute('UPDATE posts SET is_hidden = 0 WHERE id = ?', (post_id,))
+        conn.commit()
+    finally:
+        conn.close()
+    write_admin_audit_log(session['user_id'], session.get('username', ''), 'restore', 'post', post_id, reason)
+    return jsonify({'success': True})
+
+
+@app.route('/api/admin/comments/<int:comment_id>/hide', methods=['POST'])
+@admin_required
+def admin_hide_comment(comment_id):
+    reason = (request.get_json(silent=True) or {}).get('reason', '').strip()
+    if not reason:
+        return jsonify({'error': '请填写操作原因'}), 400
+    conn = get_db_connection()
+    try:
+        row = conn.execute('SELECT id FROM post_comments WHERE id = ?', (comment_id,)).fetchone()
+        if not row:
+            return jsonify({'error': '评论不存在'}), 404
+        conn.execute('UPDATE post_comments SET is_hidden = 1 WHERE id = ?', (comment_id,))
+        conn.commit()
+    finally:
+        conn.close()
+    write_admin_audit_log(session['user_id'], session.get('username', ''), 'hide', 'comment', comment_id, reason)
+    return jsonify({'success': True})
+
+
+@app.route('/api/admin/comments/<int:comment_id>/restore', methods=['POST'])
+@admin_required
+def admin_restore_comment(comment_id):
+    reason = (request.get_json(silent=True) or {}).get('reason', '').strip()
+    if not reason:
+        return jsonify({'error': '请填写操作原因'}), 400
+    conn = get_db_connection()
+    try:
+        row = conn.execute('SELECT id FROM post_comments WHERE id = ?', (comment_id,)).fetchone()
+        if not row:
+            return jsonify({'error': '评论不存在'}), 404
+        conn.execute('UPDATE post_comments SET is_hidden = 0 WHERE id = ?', (comment_id,))
+        conn.commit()
+    finally:
+        conn.close()
+    write_admin_audit_log(session['user_id'], session.get('username', ''), 'restore', 'comment', comment_id, reason)
+    return jsonify({'success': True})
+
+
+@app.route('/api/admin/posts/<int:post_id>', methods=['DELETE'])
+@admin_required
+def admin_delete_post(post_id):
+    reason = (request.get_json(silent=True) or {}).get('reason', '').strip()
+    if not reason:
+        return jsonify({'error': '请填写操作原因'}), 400
+    conn = get_db_connection()
+    try:
+        post = conn.execute('SELECT * FROM posts WHERE id = ?', (post_id,)).fetchone()
+        if not post:
+            return jsonify({'error': '帖子不存在'}), 404
+        conn.execute('DELETE FROM post_comments WHERE post_id = ?', (post_id,))
+        conn.execute('DELETE FROM post_likes WHERE post_id = ?', (post_id,))
+        conn.execute('DELETE FROM posts WHERE id = ?', (post_id,))
+        conn.commit()
+    finally:
+        conn.close()
+    write_admin_audit_log(session['user_id'], session.get('username', ''), 'delete', 'post', post_id, reason)
+    return jsonify({'success': True})
+
+
+@app.route('/api/admin/comments/<int:comment_id>', methods=['DELETE'])
+@admin_required
+def admin_delete_comment(comment_id):
+    reason = (request.get_json(silent=True) or {}).get('reason', '').strip()
+    if not reason:
+        return jsonify({'error': '请填写操作原因'}), 400
+    conn = get_db_connection()
+    try:
+        row = conn.execute('SELECT id FROM post_comments WHERE id = ?', (comment_id,)).fetchone()
+        if not row:
+            return jsonify({'error': '评论不存在'}), 404
+        conn.execute('DELETE FROM post_comments WHERE id = ?', (comment_id,))
+        conn.commit()
+    finally:
+        conn.close()
+    write_admin_audit_log(session['user_id'], session.get('username', ''), 'delete', 'comment', comment_id, reason)
+    return jsonify({'success': True})
+
+
+@app.route('/api/admin/audit-logs')
+@admin_required
+def admin_audit_logs():
+    page = int(request.args.get('page', 1) or 1)
+    page_size = min(100, max(1, int(request.args.get('page_size', 10) or 10)))
+    offset = (page - 1) * page_size
+    admin_name = (request.args.get('admin_name') or '').strip()
+    action = (request.args.get('action') or '').strip()
+    date_from = (request.args.get('date_from') or '').strip()
+    date_to = (request.args.get('date_to') or '').strip()
+
+    conn = get_db_connection()
+    try:
+        where = '1=1'
+        params = []
+        if admin_name:
+            where += ' AND admin_name LIKE ?'
+            params.append(f"%{admin_name}%")
+        if action:
+            where += ' AND action = ?'
+            params.append(action)
+        if date_from:
+            where += ' AND substr(created_at,1,10) >= ?'
+            params.append(date_from)
+        if date_to:
+            where += ' AND substr(created_at,1,10) <= ?'
+            params.append(date_to)
+
+        total = conn.execute(f'SELECT COUNT(*) FROM admin_audit_logs WHERE {where}', tuple(params)).fetchone()[0]
+        rows = conn.execute(
+            f'''
+            SELECT * FROM admin_audit_logs
+            WHERE {where}
+            ORDER BY created_at DESC
+            LIMIT ? OFFSET ?
+            ''',
+            tuple(params + [page_size, offset])
+        ).fetchall()
+
+        stat_rows = conn.execute(
+            f'''
+            SELECT action, COUNT(*) AS cnt
+            FROM admin_audit_logs
+            WHERE {where}
+            GROUP BY action
+            ''',
+            tuple(params)
+        ).fetchall()
+        action_stats = {r['action']: r['cnt'] for r in stat_rows}
+
+        return jsonify({
+            'items': [dict(r) for r in rows],
+            'page': page,
+            'page_size': page_size,
+            'total': total,
+            'action_stats': action_stats
+        })
+    finally:
+        conn.close()
+
+# --- 轻量多模态融合 v2 ---
+USE_FUSION_V2 = True
+
+
+def _clamp01(x):
+    try:
+        return max(0.0, min(1.0, float(x)))
+    except Exception:
+        return 0.0
+
+
+def _severity_from_norm(v):
+    if v >= 0.66:
+        return "high"
+    if v >= 0.33:
+        return "medium"
+    return "low"
+
+
+def _score_obj(score, max_score, risk_threshold=0.66):
+    norm = _clamp01((score / max_score) if max_score else 0.0)
+    return {
+        "score": int(score),
+        "normalized": round(norm, 4),
+        "severity": _severity_from_norm(norm),
+        "risk_flag": bool(norm >= risk_threshold)
+    }
+
+
+def calculate_scale_scores(answers):
+    """
+    轻量量表计分：支持标准量表输入 + 兼容旧题库输入（qid->val）
+    返回包含每量表 score/normalized/severity/risk_flag 与 phq9_item9_flag
+    """
+    standardized = answers if isinstance(answers, dict) else {}
+    is_standardized = any(k in standardized for k in ["PHQ-9", "GAD-7", "PSS-14", "RSES", "ISP", "PSQI"])
+
+    phq9, gad7, pss14, rses, isp, psqi = 0, 0, 0, 0, 0, 0
+    phq9_item9 = 0
+
+    if is_standardized:
+        # 标准输入：answers[scale][item_id] = value
+        phq = standardized.get("PHQ-9", {}) or {}
+        for i in range(1, 10):
+            v = int(phq.get(str(i), phq.get(i, 0)) or 0)
+            v = max(0, min(3, v))
+            phq9 += v
+            if i == 9:
+                phq9_item9 = v
+
+        gad = standardized.get("GAD-7", {}) or {}
+        for i in range(1, 8):
+            v = int(gad.get(str(i), gad.get(i, 0)) or 0)
+            gad7 += max(0, min(3, v))
+
+        # PSS-14: 0-4, 反向题常用 4,5,6,7,9,10,13
+        pss_reverse = {4, 5, 6, 7, 9, 10, 13}
+        pss = standardized.get("PSS-14", {}) or {}
+        for i in range(1, 15):
+            raw = int(pss.get(str(i), pss.get(i, 0)) or 0)
+            raw = max(0, min(4, raw))
+            pss14 += (4 - raw) if i in pss_reverse else raw
+
+        # RSES: 1-4，反向题 3,5,8,9,10
+        rses_reverse = {3, 5, 8, 9, 10}
+        rs = standardized.get("RSES", {}) or {}
+        for i in range(1, 11):
+            raw = int(rs.get(str(i), rs.get(i, 1)) or 1)
+            raw = max(1, min(4, raw))
+            val = raw - 1  # 统一到0-3
+            rses += (3 - val) if i in rses_reverse else val
+
+        # ISP-22: 默认 1-5 映射到 0-4 累加
+        ispv = standardized.get("ISP", {}) or {}
+        for i in range(1, 23):
+            raw = int(ispv.get(str(i), ispv.get(i, 1)) or 1)
+            raw = max(1, min(5, raw))
+            isp += (raw - 1)
+
+        # PSQI 简版：默认 7 题，每题 0-3
+        ps = standardized.get("PSQI", {}) or {}
+        for i in range(1, 8):
+            raw = int(ps.get(str(i), ps.get(i, 0)) or 0)
+            psqi += max(0, min(3, raw))
+    else:
+        # 兼容旧输入：answers[q_id] = value，按题库 category 映射
+        raw_answers = answers if isinstance(answers, dict) else {}
+        if raw_answers:
+            conn = get_db_connection()
+            try:
+                q_ids = []
+                for k in raw_answers.keys():
+                    try:
+                        q_ids.append(int(k))
+                    except Exception:
+                        continue
+                q_map = {}
+                if q_ids:
+                    placeholders = ','.join(['?'] * len(q_ids))
+                    rows = conn.execute(
+                        f'SELECT id, category, scale_type FROM questions WHERE id IN ({placeholders})',
+                        tuple(q_ids)
+                    ).fetchall()
+                    q_map = {int(r['id']): dict(r) for r in rows}
+
+                dep_idx = 0
+                for k, v in raw_answers.items():
+                    try:
+                        qid = int(k)
+                        val = max(0, min(3, int(v or 0)))
+                    except Exception:
+                        continue
+                    qmeta = q_map.get(qid)
+                    if not qmeta:
+                        continue
+                    cat = qmeta.get('category')
+                    if cat == 'Depression':
+                        dep_idx += 1
+                        phq9 += val
+                        if dep_idx == 9:
+                            phq9_item9 = val
+                    elif cat == 'Anxiety':
+                        gad7 += val
+                    elif cat == 'Sleep':
+                        psqi += val
+                    elif cat == 'Pressure':
+                        pss14 += val
+                    elif cat == 'Social':
+                        isp += val
+                    elif cat == 'Self':
+                        rses += (3 - val)
+            finally:
+                conn.close()
+
+    scale_scores = {
+        "PHQ-9": _score_obj(phq9, 27, 0.55),
+        "GAD-7": _score_obj(gad7, 21, 0.55),
+        "PSS-14": _score_obj(pss14, 56, 0.6),
+        "RSES": _score_obj(rses, 30, 0.35),
+        "ISP": _score_obj(isp, 88, 0.6),
+        "PSQI": _score_obj(psqi, 21, 0.5),
+        "phq9_item9_flag": bool(phq9_item9 >= 1),
+        "phq9_item9": int(phq9_item9)
+    }
+    return scale_scores
+
+
+def build_scale_summary(scale_scores):
+    return {
+        "depression": scale_scores.get("PHQ-9", {}).get("normalized", 0.0),
+        "anxiety": scale_scores.get("GAD-7", {}).get("normalized", 0.0),
+        "stress": scale_scores.get("PSS-14", {}).get("normalized", 0.0),
+        "self_esteem": scale_scores.get("RSES", {}).get("normalized", 0.0),
+        "interpersonal": scale_scores.get("ISP", {}).get("normalized", 0.0),
+        "sleep": scale_scores.get("PSQI", {}).get("normalized", 0.0)
+    }
+
+
+def _normalize_text_modal(payload):
+    text = (payload.get('text') or '').strip()
+    if not text:
+        return {"prob": 0.0, "quality": 0.0, "uncertainty": 1.0, "available": False}
+    tokens = text.split()
+    valid_ratio = sum(1 for t in tokens if len(t.strip()) > 1) / max(1, len(tokens))
+    len_score = min(len(text) / 120.0, 1.0)
+    quality = _clamp01(0.6 * len_score + 0.4 * valid_ratio)
+    return {
+        "prob": _clamp01(payload.get('text_prob', payload.get('text_risk_prob', 0.0))),
+        "quality": round(quality, 4),
+        "uncertainty": round(1.0 - quality, 4),
+        "available": True
+    }
+
+
+def _normalize_speech_modal(v_label, v_conf):
+    conf = _clamp01(v_conf)
+    prob = conf if int(v_label or 0) == 1 else (1.0 - conf) * 0.35
+    quality = conf
+    return {
+        "prob": round(_clamp01(prob), 4),
+        "quality": round(quality, 4),
+        "uncertainty": round(1.0 - quality, 4),
+        "available": bool(v_conf > 0)
+    }
+
+
+def _normalize_face_modal(visual_score, visual_emotion):
+    score = _clamp01(visual_score)
+    emo = (visual_emotion or 'Neutral').lower()
+    quality = 0.8 if emo != 'neutral' else 0.65
+    if score <= 0:
+        return {"prob": 0.0, "quality": 0.0, "uncertainty": 1.0, "available": False}
+    return {
+        "prob": round(score, 4),
+        "quality": round(quality, 4),
+        "uncertainty": round(1.0 - quality, 4),
+        "available": True
+    }
+
+
+def get_modal_outputs(payload, v_label, v_conf, visual_score, visual_emotion):
+    return {
+        "text": _normalize_text_modal(payload),
+        "speech": _normalize_speech_modal(v_label, v_conf),
+        "face": _normalize_face_modal(visual_score, visual_emotion)
+    }
+
+
+def _level_from_score(score, critical=False):
+    if critical:
+        return "CRITICAL"
+    if score > 0.6:
+        return "HIGH"
+    if score >= 0.3:
+        return "MEDIUM"
+    return "LOW"
+
+
+def compute_fusion(modal_outputs, scale_summary, flags):
+    eps = 1e-8
+    raw_weights = {}
+    for m in ["text", "speech", "face"]:
+        mo = modal_outputs.get(m, {})
+        available = 1.0 if mo.get("available") else 0.0
+        raw_weights[m] = _clamp01(mo.get("quality", 0.0)) * (1.0 - _clamp01(mo.get("uncertainty", 1.0))) * available
+
+    w_sum = sum(raw_weights.values())
+    if w_sum <= eps:
+        weights = {"text": 0.0, "speech": 0.0, "face": 0.0}
+        p_behavior = 0.0
+    else:
+        weights = {k: (v / w_sum) for k, v in raw_weights.items()}
+        p_behavior = sum(weights[k] * _clamp01(modal_outputs.get(k, {}).get("prob", 0.0)) for k in weights)
+
+    depression = _clamp01(scale_summary.get("depression", 0.0))
+    p_final = 0.6 * p_behavior + 0.4 * depression
+
+    phq9_item9_flag = bool(flags.get('phq9_item9_flag', False))
+    if phq9_item9_flag:
+        p_final = max(p_final, 0.85)
+
+    if _clamp01(scale_summary.get("depression", 0.0)) >= 0.66 and _clamp01(scale_summary.get("anxiety", 0.0)) >= 0.66:
+        p_final += 0.1
+
+    if _clamp01(scale_summary.get("self_esteem", 1.0)) <= 0.33:
+        p_final += 0.05
+
+    text_prob = _clamp01(modal_outputs.get("text", {}).get("prob", 0.0))
+    face_prob = _clamp01(modal_outputs.get("face", {}).get("prob", 0.0))
+    conflict = abs(text_prob - face_prob)
+
+    explanation = []
+    behavior_alpha, scale_alpha = 0.6, 0.4
+    if conflict >= 0.45:
+        behavior_alpha, scale_alpha = 0.45, 0.55
+        p_final = behavior_alpha * p_behavior + scale_alpha * depression
+        explanation.append("文本与面部信号冲突较高，系统已提高量表权重。")
+
+    p_final = _clamp01(p_final)
+    confidence = _clamp01(sum(weights.values()) / 1.0)
+    risk_level = _level_from_score(p_final, phq9_item9_flag)
+
+    if phq9_item9_flag:
+        explanation.append("PHQ-9 第9题提示存在自伤/轻生相关风险信号。")
+    if not explanation:
+        explanation.append("多模态信号与量表结果整体一致。")
+
+    return {
+        "risk_score": round(p_final, 4),
+        "risk_level": risk_level,
+        "weights": {k: round(v, 4) for k, v in weights.items()},
+        "confidence": round(confidence, 4),
+        "explanation": " ".join(explanation),
+        "conflict": round(conflict, 4),
+        "p_behavior": round(p_behavior, 4)
+    }
+
+
+def build_intervention_template(risk_level, critical_flag=False):
+    if critical_flag or risk_level == "CRITICAL":
+        return {
+            "title": "紧急求助建议",
+            "actions": [
+                "请立即联系家人、朋友或当地心理危机干预热线。",
+                "若存在即时伤害风险，请立刻拨打120或前往最近急诊。",
+                "不要独处，尽快与可信赖的人保持陪伴。"
+            ]
+        }
+    if risk_level == "HIGH":
+        return {"title": "高风险干预", "actions": ["建议尽快预约学校/医院心理中心专业评估。", "减少独处与高压情境，保持规律作息。"]}
+    if risk_level == "MEDIUM":
+        return {"title": "中风险建议", "actions": ["建议进行 CBT 自助练习，并在 7 天内复测。", "记录触发事件与情绪变化，观察趋势。"]}
+    return {"title": "低风险自助", "actions": ["保持规律作息和日常运动。", "持续每周自评，关注情绪波动。"]}
+
 # --- 4. 核心 API 接口 ---
 @app.route('/api/questions')
 def get_questions():
@@ -1569,61 +2814,92 @@ def submit_assessment():
     try:
         user_answers = json.loads(request.form.get('answers', '{}'))
         audio_file = request.files.get('audio')
-        
-        # 获取当前用户ID（如果已登录）
         user_id = session.get('user_id')
-        
+
         v_label = 0
         v_conf = 0.0
         visual_score = float(request.form.get('vision_score', 0) or 0)
         visual_emotion = request.form.get('vision_emotion', 'Neutral')
+        text_input = request.form.get('text', '')
+
+        voice_collected = str(request.form.get('voice_collected', '0')).strip() in ('1', 'true', 'True')
+        vision_collected = str(request.form.get('vision_collected', '0')).strip() in ('1', 'true', 'True')
 
         if audio_file:
-            filename = f"voice_{uuid.uuid4().hex}.wav"
+            raw_name = (audio_file.filename or '').lower()
+            ext = raw_name.rsplit('.', 1)[-1] if '.' in raw_name else 'wav'
+            filename = f"voice_{uuid.uuid4().hex}.{ext}"
             file_path = os.path.join(UPLOAD_FOLDER, filename)
             audio_file.save(file_path)
+            voice_collected = True
             v_label, v_conf = voice_analyzer.predict(file_path)
+            logger.info(f"[voice_submit] name={audio_file.filename} ext={ext} size={os.path.getsize(file_path)} label={v_label} conf={v_conf:.4f}")
 
-        # 扩展所有新维度
-        scores = {
-            "Depression": 0, 
-            "Anxiety": 0, 
-            "Sleep": 0, 
-            "Pressure": 0,
-            "Social": 0,
-            "Self": 0
-        }
-        
+        if not USE_FUSION_V2:
+            scores = {"Depression": 0, "Anxiety": 0, "Sleep": 0, "Pressure": 0, "Social": 0, "Self": 0}
+            conn = get_db_connection()
+            for q_id, val in user_answers.items():
+                q = conn.execute('SELECT category FROM questions WHERE id=?', (q_id,)).fetchone()
+                if q and q['category'] in scores:
+                    scores[q['category']] += int(val)
+            phq = scores["Depression"]
+            if phq >= 15 or v_label == 1 or visual_score >= 0.65:
+                risk = "高风险"
+            elif phq >= 7 or visual_score >= 0.45:
+                risk = "中等风险"
+            else:
+                risk = "低风险"
+            conn.execute('''
+                INSERT INTO records (
+                    user_id, phq_score, anxiety_score, sleep_score, pressure_score,
+                    social_score, self_score, risk_level, voice_label, voice_confidence, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                user_id, scores["Depression"], scores["Anxiety"], scores["Sleep"], scores["Pressure"],
+                scores["Social"], scores["Self"], risk, v_label, v_conf, beijing_timestamp_str()
+            ))
+            conn.commit()
+            conn.close()
+            return jsonify({"risk_level": risk, "scores": scores})
+
+        scale_scores = calculate_scale_scores(user_answers)
+        scale_summary = build_scale_summary(scale_scores)
+
+        modal_outputs = get_modal_outputs(
+            {"text": text_input, "text_prob": request.form.get('text_prob', 0)},
+            v_label,
+            v_conf,
+            visual_score,
+            visual_emotion
+        )
+
+        fusion = compute_fusion(
+            modal_outputs,
+            scale_summary,
+            {"phq9_item9_flag": scale_scores.get("phq9_item9_flag", False)}
+        )
+
+        intervention = build_intervention_template(
+            fusion["risk_level"],
+            critical_flag=scale_scores.get("phq9_item9_flag", False)
+        )
+        disclaimer = "本系统仅用于心理风险筛查，不替代临床诊断。若存在明显痛苦或自伤风险，请立即联系专业机构。"
+
         conn = get_db_connection()
-        for q_id, val in user_answers.items():
-            q = conn.execute('SELECT category FROM questions WHERE id=?', (q_id,)).fetchone()
-            if q and q['category'] in scores:
-                scores[q['category']] += int(val)
-        
-        # --- 综合风险判定逻辑（量表 + 语音 + 视觉） ---
-        phq = scores["Depression"]
-        if phq >= 15 or v_label == 1 or visual_score >= 0.65:
-            risk = "高风险"
-        elif phq >= 7 or visual_score >= 0.45:
-            risk = "中等风险"
-        else:
-            risk = "低风险"
-
-        # 存入数据库（包含 user_id 以关联用户）
         conn.execute('''
             INSERT INTO records (
-                user_id, phq_score, anxiety_score, sleep_score, pressure_score, 
+                user_id, phq_score, anxiety_score, sleep_score, pressure_score,
                 social_score, self_score, risk_level, voice_label, voice_confidence, created_at
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             user_id,
-            scores["Depression"], 
-            scores["Anxiety"], 
-            scores["Sleep"], 
-            scores["Pressure"],
-            scores["Social"],
-            scores["Self"],
-            risk, 
+            scale_scores.get("PHQ-9", {}).get("score", 0),
+            scale_scores.get("GAD-7", {}).get("score", 0),
+            scale_scores.get("PSQI", {}).get("score", 0),
+            scale_scores.get("PSS-14", {}).get("score", 0),
+            scale_scores.get("ISP", {}).get("score", 0),
+            scale_scores.get("RSES", {}).get("score", 0),
+            fusion["risk_level"],
             v_label,
             v_conf,
             beijing_timestamp_str()
@@ -1631,45 +2907,68 @@ def submit_assessment():
         conn.commit()
         conn.close()
 
-        # --- 雷达图归一化处理 (折算为10分制) ---
-        # 计算公式：(实际得分 / 该维度最大可能得分) * 10
-        voice_radar = round((v_label * 7 + 2), 1)
-        visual_radar = round(max(0.0, min(10.0, visual_score * 10)), 1)
-        multimodal_radar = round(max(voice_radar, visual_radar), 1)
+        # 最小评估日志
+        logger.info(f"[fusion_v2] user={user_id} risk={fusion['risk_level']} score={fusion['risk_score']} weights={fusion['weights']} conflict={fusion['conflict']}")
+        if fusion['conflict'] >= 0.45:
+            logger.warning(f"[fusion_v2_conflict] user={user_id} conflict={fusion['conflict']} text={modal_outputs['text']['prob']} face={modal_outputs['face']['prob']}")
+        logger.info(f"[fusion_v2_distribution] level={fusion['risk_level']}")
 
+        # 兼容旧版报告页字段
         radar_data = [
-            round((scores["Depression"] / 27) * 10, 1), # PHQ-9 满分 27
-            round((scores["Anxiety"] / 21) * 10, 1),    # GAD-7 满分 21
-            round((scores["Sleep"] / 12) * 10, 1),      # 4题 满分 12
-            round((scores["Pressure"] / 12) * 10, 1),   # 4题 满分 12
-            round((scores["Social"] / 9) * 10, 1),      # 3题 满分 9
-            round((scores["Self"] / 9) * 10, 1),        # 3题 满分 9
-            multimodal_radar                              # 多模态风险映射（语音+视觉）
+            round(scale_summary["depression"] * 10, 1),
+            round(scale_summary["anxiety"] * 10, 1),
+            round(scale_summary["sleep"] * 10, 1),
+            round(scale_summary["stress"] * 10, 1),
+            round(scale_summary["interpersonal"] * 10, 1),
+            round((1.0 - scale_summary["self_esteem"]) * 10, 1),
+            round(fusion["risk_score"] * 10, 1)
         ]
-
-        # 计算主要问题类别（得分最高的维度）
-        category_scores = {
-            "Depression": scores["Depression"],
-            "Anxiety": scores["Anxiety"],
-            "Sleep": scores["Sleep"],
-            "Pressure": scores["Pressure"],
-            "Social": scores["Social"],
-            "Self": scores["Self"]
-        }
-        highest_category = max(category_scores, key=category_scores.get)
+        highest_category = max({
+            "Depression": scale_summary["depression"],
+            "Anxiety": scale_summary["anxiety"],
+            "Sleep": scale_summary["sleep"],
+            "Pressure": scale_summary["stress"],
+            "Social": scale_summary["interpersonal"],
+            "Self": (1.0 - scale_summary["self_esteem"])
+        }, key=lambda k: {
+            "Depression": scale_summary["depression"],
+            "Anxiety": scale_summary["anxiety"],
+            "Sleep": scale_summary["sleep"],
+            "Pressure": scale_summary["stress"],
+            "Social": scale_summary["interpersonal"],
+            "Self": (1.0 - scale_summary["self_esteem"])
+        }[k])
 
         return jsonify({
-            "risk_level": risk,
+            "scale_summary": scale_summary,
+            "risk_score": fusion["risk_score"],
+            "risk_level": fusion["risk_level"],
+            "weights": fusion["weights"],
+            "confidence": fusion["confidence"],
+            "explanation": fusion["explanation"],
+            "phq9_item9_flag": bool(scale_scores.get("phq9_item9_flag", False)),
+            "intervention": intervention,
+            "disclaimer": disclaimer,
+            "modal_outputs": modal_outputs,
             "radar_data": radar_data,
-            "scores": scores, # 将原始分数也传回前端，方便详细显示
-            "highest_category": highest_category,  # 主要问题类别
+            "highest_category": highest_category,
+            "vision": {
+                "emotion": visual_emotion if vision_collected else "SKIPPED",
+                "score": float(visual_score),
+                "collected": bool(vision_collected)
+            },
             "voice": {
                 "label": int(v_label),
-                "confidence": float(v_conf)
+                "confidence": float(v_conf),
+                "collected": bool(voice_collected)
             },
-            "vision": {
-                "emotion": visual_emotion,
-                "score": float(visual_score)
+            "scale_scores": {
+                "PHQ-9": scale_scores.get("PHQ-9", {}),
+                "GAD-7": scale_scores.get("GAD-7", {}),
+                "PSS-14": scale_scores.get("PSS-14", {}),
+                "RSES": scale_scores.get("RSES", {}),
+                "ISP": scale_scores.get("ISP", {}),
+                "PSQI": scale_scores.get("PSQI", {})
             }
         })
     except Exception as e:

@@ -143,8 +143,82 @@
 <script>
 {% if session.get('user_id') %}sessionStorage.setItem('user_id','{{ session.get("user_id") }}');{% endif %}
 let questions=[],currentIndex=0,answers={},pathHistory=[];
+let groupedQuestions=[];
 let mediaRecorder,audioChunks=[],timerInterval;
 let lastAudioBlob=null;
+let lastAudioExt='wav';
+let voiceCollected=false;
+let visionCollected=false;
+
+function floatTo16BitPCM(view, offset, input){
+  for(let i=0;i<input.length;i++,offset+=2){
+    const s=Math.max(-1,Math.min(1,input[i]));
+    view.setInt16(offset, s<0 ? s*0x8000 : s*0x7FFF, true);
+  }
+}
+
+function writeString(view, offset, str){
+  for(let i=0;i<str.length;i++) view.setUint8(offset+i, str.charCodeAt(i));
+}
+
+function audioBufferToWavBlob(audioBuffer){
+  const numChannels=1;
+  const sampleRate=16000;
+  const offlineCtx=new OfflineAudioContext(numChannels, Math.ceil(audioBuffer.duration*sampleRate), sampleRate);
+  const source=offlineCtx.createBufferSource();
+  const monoBuffer=offlineCtx.createBuffer(numChannels, audioBuffer.length, audioBuffer.sampleRate);
+
+  const ch0=audioBuffer.getChannelData(0);
+  if(audioBuffer.numberOfChannels>1){
+    const ch1=audioBuffer.getChannelData(1);
+    const mixed=new Float32Array(ch0.length);
+    for(let i=0;i<ch0.length;i++) mixed[i]=(ch0[i]+(ch1[i]||0))*0.5;
+    monoBuffer.copyToChannel(mixed,0);
+  }else{
+    monoBuffer.copyToChannel(ch0,0);
+  }
+
+  source.buffer=monoBuffer;
+  source.connect(offlineCtx.destination);
+  source.start(0);
+
+  return offlineCtx.startRendering().then(rendered=>{
+    const samples=rendered.getChannelData(0);
+    const buffer=new ArrayBuffer(44+samples.length*2);
+    const view=new DataView(buffer);
+
+    writeString(view,0,'RIFF');
+    view.setUint32(4,36+samples.length*2,true);
+    writeString(view,8,'WAVE');
+    writeString(view,12,'fmt ');
+    view.setUint32(16,16,true);
+    view.setUint16(20,1,true);
+    view.setUint16(22,1,true);
+    view.setUint32(24,sampleRate,true);
+    view.setUint32(28,sampleRate*2,true);
+    view.setUint16(32,2,true);
+    view.setUint16(34,16,true);
+    writeString(view,36,'data');
+    view.setUint32(40,samples.length*2,true);
+    floatTo16BitPCM(view,44,samples);
+
+    return new Blob([view],{type:'audio/wav'});
+  });
+}
+
+async function normalizeAudioToWav(blob){
+  const AudioCtx=window.AudioContext||window.webkitAudioContext;
+  if(!AudioCtx) return blob;
+  const ctx=new AudioCtx();
+  try{
+    const arr=await blob.arrayBuffer();
+    const decoded=await ctx.decodeAudioData(arr.slice(0));
+    const wav=await audioBufferToWavBlob(decoded);
+    return wav;
+  }finally{
+    if(ctx && typeof ctx.close==='function') await ctx.close();
+  }
+}
 let stage='voice';
 let visionStream=null, visionTimer=null;
 let visionState={
@@ -163,8 +237,18 @@ const OPTION_MAP={
 async function init(){
   try{
     const res=await fetch('/api/questions');
-    questions=await res.json();
-    if(!questions.length){document.getElementById('question-content').innerHTML='<p style="color:var(--c-red);text-align:center;padding:40px 0;">暂无题目，请联系管理员初始化题库</p>';return;}
+    const allQuestions=await res.json();
+    if(!allQuestions.length){document.getElementById('question-content').innerHTML='<p style="color:var(--c-red);text-align:center;padding:40px 0;">暂无题目，请联系管理员初始化题库</p>';return;}
+
+    const byScale={};
+    allQuestions.forEach(q=>{
+      const k=q.scale_type||'DEFAULT';
+      if(!byScale[k]) byScale[k]=[];
+      byScale[k].push(q);
+    });
+    groupedQuestions=Object.keys(byScale).map(k=>({scale:k,items:byScale[k]}));
+    questions=groupedQuestions.flatMap(g=>g.items);
+
     renderQuestion();
   }catch(e){
     document.getElementById('question-content').innerHTML='<p style="color:var(--c-red);text-align:center;padding:40px 0;">题目加载失败，请刷新页面</p>';
@@ -335,6 +419,7 @@ async function captureAndAnalyzeFrame(){
     }
 
     drawFaceBox(data.face_box);
+    visionCollected = true;
     const rawScore=Number(data.depression_score||0);
     statusEl.textContent=`检测到 ${data.face_count} 张人脸 ｜ 主人脸情绪: ${visionState.latestEmotion} ｜ 视觉风险分(EMA): ${visionState.latestScore.toFixed(2)} ｜ 当前帧: ${rawScore.toFixed(2)}`;
   }catch(err){
@@ -350,8 +435,18 @@ document.getElementById('record-btn').onclick=async function(){
     mediaRecorder=new MediaRecorder(stream);
     audioChunks=[];
     mediaRecorder.ondataavailable=e=>audioChunks.push(e.data);
-    mediaRecorder.onstop=()=>{
-      lastAudioBlob=new Blob(audioChunks,{type:'audio/wav'});
+    mediaRecorder.onstop=async ()=>{
+      const mimeType = mediaRecorder.mimeType || 'audio/webm';
+      const ext = mimeType.includes('webm') ? 'webm' : (mimeType.includes('ogg') ? 'ogg' : 'wav');
+      lastAudioExt = ext;
+      const rawBlob=new Blob(audioChunks,{type:mimeType});
+      try{
+        lastAudioBlob = await normalizeAudioToWav(rawBlob);
+        lastAudioExt = 'wav';
+      }catch(err){
+        lastAudioBlob = rawBlob;
+      }
+      voiceCollected = !!lastAudioBlob && (lastAudioBlob.size||0) > 2048;
       if(stage==='voice'){
         document.getElementById('next-stage-btn').style.display='inline-flex';
         document.getElementById('stage-tip').textContent='语音检测已完成，可继续面部检测，也可以直接提交';
@@ -378,6 +473,13 @@ function stopRecording(){
   document.getElementById('recording-dot').style.display='none';
 }
 async function finalSubmit(audioBlob){
+  if(!voiceCollected){
+    const proceedWithoutVoice = confirm('当前未检测到有效语音采集记录。\n若继续提交，本次结果将仅基于量表 + 视觉（如已采集）。\n\n点击“确定”继续提交，点击“取消”返回补录语音。');
+    if(!proceedWithoutVoice){
+      return;
+    }
+  }
+
   stopVisionDetection();
   const modal=document.getElementById('voice-modal');
   modal.innerHTML=`<div style="text-align:center;padding:60px 40px;"><div class="spinner" style="margin:0 auto 20px;"></div><p style="color:var(--text-1);font-weight:600;font-size:15px;">正在进行多模态融合分析...</p><p style="color:var(--text-3);font-size:13px;margin-top:8px;">量表 + 语音 + 视觉</p></div>`;
@@ -385,7 +487,11 @@ async function finalSubmit(audioBlob){
   formData.append('answers',JSON.stringify(answers));
   formData.append('vision_score',String(visionState.latestScore||0));
   formData.append('vision_emotion',visionState.latestEmotion||'Neutral');
-  if(audioBlob)formData.append('audio',audioBlob,'assessment_voice.wav');
+  formData.append('voice_collected', voiceCollected ? '1' : '0');
+  formData.append('vision_collected', visionCollected ? '1' : '0');
+  if(audioBlob){
+    formData.append('audio',audioBlob,`assessment_voice.${lastAudioExt||'webm'}`);
+  }
   const res=await fetch('/api/submit',{method:'POST',body:formData});
   const result=await res.json();
   localStorage.setItem('eval_result',JSON.stringify(result));

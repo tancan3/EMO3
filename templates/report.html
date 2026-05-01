@@ -3,7 +3,6 @@
 {% block page_title %}评估报告{% endblock %}
 
 {% block extra_head %}
-<script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
 {% endblock %}
 
 {% block content %}
@@ -26,7 +25,18 @@
         <div class="card" style="padding:16px 18px;">
           <p style="font-size:10px;font-weight:700;color:var(--text-4);letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px;">多模态情绪结果</p>
           <p id="voice-result" style="font-weight:700;color:var(--text-1);font-size:15px;">实时匹配中</p>
+          <p id="multimodal-reason" style="margin-top:8px;font-size:12px;color:var(--text-3);line-height:1.6;">原因分析中...</p>
         </div>
+      </div>
+      <div class="card" style="padding:14px 16px;margin:-8px 0 18px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px;">
+          <p style="font-size:11px;font-weight:700;color:var(--text-4);letter-spacing:.08em;text-transform:uppercase;">数据完整度评分</p>
+          <span id="data-integrity-score" style="font-size:13px;font-weight:700;color:var(--c-primary);">--</span>
+        </div>
+        <div style="height:10px;background:#eef2f7;border-radius:999px;overflow:hidden;">
+          <div id="data-integrity-bar" style="height:100%;width:0%;background:#4f772d;transition:width .35s ease;"></div>
+        </div>
+        <p id="data-integrity-desc" style="margin-top:8px;font-size:12px;color:var(--text-3);line-height:1.6;">正在评估本次语音/视觉数据质量…</p>
       </div>
       <div style="padding:18px 22px;background:var(--c-primary-bg);border:1px solid rgba(49,87,44,0.2);border-radius:var(--r-md);margin-bottom:16px;font-size:13px;color:var(--text-2);line-height:1.8;">
         这份结果用于帮助您快速看见近期状态与压力重心，适合作为自我观察的起点；它不等同于医学诊断，如果您已经明显感到痛苦，请优先联系专业人士。
@@ -35,11 +45,27 @@
         &ldquo;您的每一个细微情绪，都值得被温柔对待。如果您感到疲惫，可以先去 AI 情绪陪伴里慢慢说。&rdquo;
       </div>
       <div id="action-suggestion" style="margin-bottom:20px;padding:14px 16px;border-radius:var(--r-md);background:rgba(255,255,255,.72);border:1px dashed rgba(49,87,44,.18);font-size:13px;color:var(--text-2);line-height:1.75;">正在生成下一步建议...</div>
+      <div id="mbti-summary-card" style="margin-bottom:20px;padding:14px 16px;border-radius:var(--r-md);background:#fff;border:1px solid var(--border);font-size:13px;color:var(--text-2);line-height:1.75;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+          <div style="font-size:11px;font-weight:700;color:var(--text-4);letter-spacing:.08em;text-transform:uppercase;">人格画像（MBTI）</div>
+          <a href="/mbti" style="font-size:12px;color:var(--c-primary);font-weight:700;">去完善</a>
+        </div>
+        <div id="mbti-summary-text" style="margin-top:8px;color:var(--text-3);">未完成人格测试，建议补充后获取更个性化的干预建议。</div>
+      </div>
       <div style="display:flex;gap:12px;flex-wrap:wrap;">
         <a href="/soothe" class="btn btn-primary" style="flex:1;justify-content:center;">去聊聊，先缓一缓</a>
         <a href="/detect" class="btn btn-ghost">重新测试</a>
       </div>
     </div>
+  </div>
+
+  <!-- 量表分数条 -->
+  <div class="card" style="padding:22px;margin-bottom:28px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
+      <h3 style="font-size:14px;font-weight:700;color:var(--text-1);">量表分数概览</h3>
+      <span style="font-size:11px;color:var(--text-3);">显示原始分数与归一化进度</span>
+    </div>
+    <div id="scale-bars" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;"></div>
   </div>
 
   <!-- 推荐阅读 -->
@@ -70,35 +96,216 @@
 {% if session.get('user_id') %}sessionStorage.setItem('user_id','{{ session.get("user_id") }}');{% endif %}
 const catNames={'Depression':'抑郁','Anxiety':'焦虑','Sleep':'睡眠','Pressure':'压力','Social':'社交','Self':'自我成长'};
 const catBadge={'Depression':'badge-red','Anxiety':'badge-orange','Sleep':'badge-blue','Pressure':'badge-orange','Social':'badge-green','Self':'badge-blue'};
-const data=JSON.parse(localStorage.getItem('eval_result'))||{radar_data:[5,5,5,5,5,5,5],risk_level:'数据读取失败'};
-document.getElementById('risk-text').textContent=data.risk_level;
-const indNames=['抑郁指征','焦虑水平','睡眠指数','压力感知','社交压力','自我认同'];
-const scores=data.radar_data.slice(0,6);
-const maxIdx=scores.indexOf(Math.max(...scores));
-document.getElementById('top-stressor').textContent=indNames[maxIdx];
-const voiceVal=data.radar_data[6]||2;
-const visionEmotion=data.vision?.emotion||'Neutral';
+const data=JSON.parse(localStorage.getItem('eval_result'))||{};
+
+document.getElementById('risk-text').textContent=data.risk_level||'LOW';
 const summaryText=document.getElementById('action-suggestion');
-document.getElementById('voice-result').textContent=voiceVal>=5?`当前压力波动偏高（视觉:${visionEmotion}）`:`当前状态相对平稳（视觉:${visionEmotion}）`;
-if(summaryText){
-  if(data.risk_level==='高风险') summaryText.textContent='建议先去 AI 情绪陪伴里把此刻最强烈的感受说出来，再结合推荐内容做一步一步的缓和；如果痛苦持续明显，请尽快联系专业帮助。';
-  else if(data.risk_level==='中等风险') summaryText.textContent='建议先记录这一周最明显的压力来源，再去看看推荐内容，给自己留一个稳定节奏的调整空间。';
-  else summaryText.textContent='当前结果更适合用于持续观察。你可以继续保持打卡与记录，把稳定状态慢慢巩固下来。';
+const voiceVal=Number(data.voice?.confidence||0);
+const voiceCollected=!!data.voice?.collected;
+const visionCollected=!!data.vision?.collected;
+const visionEmotion=(visionCollected ? (data.vision?.emotion||'Neutral') : 'SKIPPED');
+const hasVoice = voiceCollected;
+const hasVision = visionCollected;
+
+function buildMultimodalText(){
+  if(!hasVoice && !hasVision){
+    return '未采集到语音与视觉信号（仅基于量表评估）';
+  }
+  if(!hasVoice && hasVision){
+    return `未采集到语音，当前以视觉信号为辅（视觉:${visionEmotion}）`;
+  }
+
+  let voiceLevel='低';
+  if(voiceVal>=0.75) voiceLevel='高';
+  else if(voiceVal>=0.45) voiceLevel='中';
+
+  const base=`语音可信度${voiceLevel}（${Math.round(voiceVal*100)}%）`;
+  if(!hasVision) return `${base}（未采集视觉）`;
+  return `${base}（视觉:${visionEmotion}）`;
 }
-const chart=echarts.init(document.getElementById('radar-chart'));
-chart.setOption({
-  backgroundColor:'transparent',
-  radar:{indicator:[{name:'抑郁指征',max:10},{name:'焦虑水平',max:10},{name:'睡眠指数',max:10},{name:'压力感知',max:10},{name:'社交压力',max:10},{name:'自我认同',max:10},{name:'多模态情绪',max:10}],
-    shape:'circle',radius:'65%',
-    axisName:{color:'var(--text-3)',fontSize:12,fontWeight:'bold'},
-    splitLine:{lineStyle:{color:'var(--border)',width:1}},
-    splitArea:{show:false},axisLine:{lineStyle:{color:'var(--border)'}}},
-  series:[{type:'radar',data:[{value:data.radar_data,name:'心理特征',symbol:'circle',symbolSize:6,
-    areaStyle:{color:new echarts.graphic.RadialGradient(0.5,0.5,1,[{color:'rgba(79,119,45,0.45)',offset:0},{color:'rgba(79,119,45,0.05)',offset:1}])},
-    lineStyle:{width:2.5,color:'#4f772d'},
-    itemStyle:{color:'#4f772d',borderWidth:2,borderColor:'rgba(255,255,255,0.3)'}}]}]
-});
-window.onresize=()=>chart.resize();
+
+function buildMultimodalReasonAndIntegrity(){
+  const reasons=[];
+  let score=100;
+
+  if(!hasVoice){
+    reasons.push('未采集到有效语音信号（可能录音时长不足或未成功上传）');
+    score-=45;
+  } else {
+    if(voiceVal < 0.35){
+      reasons.push('语音置信度偏低（可能存在声音过小、环境噪声偏大）');
+      score-=28;
+    } else if(voiceVal < 0.55){
+      reasons.push('语音置信度中等（建议延长录音并保证安静环境）');
+      score-=14;
+    }
+  }
+
+  const visionScore = Number(data.vision?.score ?? 0);
+  if(!hasVision){
+    reasons.push('未采集视觉信号（未开启摄像头或检测未触发）');
+    score-=35;
+  } else {
+    if((visionEmotion||'').toLowerCase()==='neutral' && visionScore <= 0.05){
+      reasons.push('视觉信号较弱（可能未检测到稳定人脸）');
+      score-=20;
+    } else if(visionScore <= 0.2){
+      reasons.push('视觉信号稳定性一般（建议正对摄像头并保持光线充足）');
+      score-=10;
+    }
+  }
+
+  score=Math.max(0,Math.min(100,Math.round(score)));
+  if(!reasons.length){
+    reasons.push('语音与视觉信号完整，当前多模态结果可靠性较好');
+  }
+
+  return {reasonText: reasons.join('；'), integrityScore: score};
+}
+
+document.getElementById('voice-result').textContent = buildMultimodalText();
+const mm = buildMultimodalReasonAndIntegrity();
+const reasonEl = document.getElementById('multimodal-reason');
+if(reasonEl) reasonEl.textContent = mm.reasonText;
+const integrityEl = document.getElementById('data-integrity-score');
+const integrityBar = document.getElementById('data-integrity-bar');
+const integrityDesc = document.getElementById('data-integrity-desc');
+if(integrityEl) integrityEl.textContent = `${mm.integrityScore}/100`;
+if(integrityBar) integrityBar.style.width = `${mm.integrityScore}%`;
+if(integrityBar){
+  integrityBar.style.background = mm.integrityScore >= 75 ? '#22c55e' : (mm.integrityScore >= 45 ? '#f59e0b' : '#ef4444');
+}
+if(integrityDesc){
+  integrityDesc.textContent = mm.integrityScore >= 75
+    ? '数据完整度较高：多模态结果参考价值较好。'
+    : (mm.integrityScore >= 45
+      ? '数据完整度中等：建议优化采集环境后再次测评。'
+      : '数据完整度较低：建议重新采集语音/视觉后再解读多模态结果。');
+}
+
+document.getElementById('top-stressor').textContent = {
+  Depression:'抑郁指征', Anxiety:'焦虑水平', Sleep:'睡眠指数', Pressure:'压力感知', Social:'社交压力', Self:'自我认同'
+}[data.highest_category] || '综合观察';
+
+if(summaryText){
+  if(data.risk_level==='CRITICAL') summaryText.textContent='检测到紧急风险信号，请立即联系家人/朋友或当地危机干预热线，并尽快前往专业机构。';
+  else if(data.risk_level==='HIGH') summaryText.textContent='当前风险较高，建议尽快联系心理中心进行专业评估，并减少独处与高压情境。';
+  else if(data.risk_level==='MEDIUM') summaryText.textContent='建议进行 CBT 自助练习，并在 7 天内复测，持续记录情绪与触发事件。';
+  else summaryText.textContent='当前风险较低，建议保持规律作息和运动，并持续每周自评。';
+}
+
+function renderScaleBars(payload){
+  const host=document.getElementById('scale-bars');
+  if(!host) return;
+  const scoreMap=payload.scale_scores||{};
+  const labels=[
+    {k:'PHQ-9',name:'PHQ-9 抑郁',max:27},
+    {k:'GAD-7',name:'GAD-7 焦虑',max:21},
+    {k:'PSS-14',name:'PSS-14 压力',max:56},
+    {k:'RSES',name:'RSES 自尊',max:30},
+    {k:'ISP',name:'ISP 人际',max:88},
+    {k:'PSQI',name:'PSQI 睡眠',max:21}
+  ];
+  host.innerHTML=labels.map(item=>{
+    const d=scoreMap[item.k]||{};
+    const score=Number(d.score||0);
+    const norm=Math.max(0,Math.min(1,Number(d.normalized||0)));
+    const percent=Math.round(norm*100);
+    const severity=(d.severity||'low').toLowerCase();
+    const barColor=severity==='high' ? '#ef4444' : severity==='medium' ? '#f59e0b' : '#22c55e';
+    return `
+      <div style="padding:12px;border:1px solid var(--border);border-radius:12px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:8px;">
+          <span style="font-size:13px;color:var(--text-1);font-weight:600;">${item.name}</span>
+          <span style="font-size:12px;color:var(--text-3);">${score}/${item.max}（${percent}%）</span>
+        </div>
+        <div style="height:10px;background:#eef2f7;border-radius:999px;overflow:hidden;">
+          <div style="height:100%;width:${percent}%;background:${barColor};transition:width .35s ease;"></div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function drawRadarCanvas(values){
+  const host=document.getElementById('radar-chart');
+  host.innerHTML='\n    <div style="position:relative;width:100%;max-width:440px;height:420px;">\n      <canvas id="radar-canvas" width="440" height="420" style="width:100%;max-width:440px;height:420px;"></canvas>\n      <div id="radar-tooltip" style="display:none;position:absolute;pointer-events:none;padding:6px 8px;border-radius:8px;background:rgba(17,24,39,.9);color:#fff;font-size:12px;z-index:5;"></div>\n    </div>';
+  const canvas=document.getElementById('radar-canvas');
+  const tip=document.getElementById('radar-tooltip');
+  const ctx=canvas.getContext('2d');
+  const labels=['抑郁','焦虑','睡眠','压力','社交','自我','多模态'];
+  const cx=220, cy=210, r=130, n=labels.length;
+
+  const points=[];
+
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.strokeStyle='#d7dde6';
+  ctx.fillStyle='#6b7280';
+  ctx.lineWidth=1;
+
+  for(let level=1; level<=5; level++){
+    ctx.beginPath();
+    for(let i=0;i<n;i++){
+      const a=-Math.PI/2 + i*2*Math.PI/n;
+      const rr=r*(level/5);
+      const x=cx+rr*Math.cos(a), y=cy+rr*Math.sin(a);
+      if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    }
+    ctx.closePath();
+    ctx.stroke();
+  }
+
+  for(let i=0;i<n;i++){
+    const a=-Math.PI/2 + i*2*Math.PI/n;
+    const x=cx+r*Math.cos(a), y=cy+r*Math.sin(a);
+    ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(x,y); ctx.stroke();
+    const lx=cx+(r+24)*Math.cos(a), ly=cy+(r+24)*Math.sin(a);
+    ctx.font='12px sans-serif';
+    ctx.textAlign='center';
+    ctx.fillText(labels[i], lx, ly);
+  }
+
+  ctx.beginPath();
+  values.forEach((v,i)=>{
+    const a=-Math.PI/2 + i*2*Math.PI/n;
+    const rr=r*Math.max(0,Math.min(1,(v||0)/10));
+    const x=cx+rr*Math.cos(a), y=cy+rr*Math.sin(a);
+    points.push({x,y,label:labels[i],value:Math.max(0,Math.min(10,Number(v||0))).toFixed(1)});
+    if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+  });
+  ctx.closePath();
+  ctx.fillStyle='rgba(79,119,45,0.28)';
+  ctx.strokeStyle='#4f772d';
+  ctx.lineWidth=2;
+  ctx.fill();
+  ctx.stroke();
+
+  // 顶点标记
+  ctx.fillStyle='#31572c';
+  points.forEach(p=>{ ctx.beginPath(); ctx.arc(p.x,p.y,3,0,Math.PI*2); ctx.fill(); });
+
+  canvas.onmousemove=(e)=>{
+    const rect=canvas.getBoundingClientRect();
+    const scaleX=canvas.width/rect.width;
+    const scaleY=canvas.height/rect.height;
+    const mx=(e.clientX-rect.left)*scaleX;
+    const my=(e.clientY-rect.top)*scaleY;
+    const hit=points.find(p=>((p.x-mx)**2+(p.y-my)**2)<=64);
+    if(hit){
+      tip.style.display='block';
+      tip.textContent=`${hit.label}: ${hit.value}`;
+      tip.style.left=`${(e.clientX-rect.left)+12}px`;
+      tip.style.top=`${(e.clientY-rect.top)-8}px`;
+    }else{
+      tip.style.display='none';
+    }
+  };
+  canvas.onmouseleave=()=>{ tip.style.display='none'; };
+}
+
+drawRadarCanvas(data.radar_data||[0,0,0,0,0,0,0]);
+renderScaleBars(data);
+
 const reportTimeEl=document.getElementById('report-time');
 if(reportTimeEl){
   const now=new Date();
@@ -123,6 +330,23 @@ async function loadRecommendedArticles(){
     document.getElementById('recommended-articles').innerHTML='<div style="color:var(--text-3);padding:40px;text-align:center;grid-column:1/-1;">暂无推荐文章</div>';
   }
 }
-window.addEventListener('load', loadRecommendedArticles);
+async function loadMbtiSummary(){
+  try{
+    const r=await fetch('/api/mbti/result');
+    const d=await r.json();
+    const el=document.getElementById('mbti-summary-text');
+    if(!el) return;
+    if(!d.has_result){
+      el.textContent='未完成人格测试，建议补充后获取更个性化的干预建议。';
+      return;
+    }
+    el.innerHTML=`<b style="color:var(--text-1);">${d.mbti_type}</b> · ${d.description||''}<br><span style="color:var(--text-3);">${d.coping_hint||''}</span><br><span style="font-size:12px;color:var(--text-4);">说明：MBTI 仅用于个性化建议，不参与风险评分。</span>`;
+  }catch(e){}
+}
+
+window.addEventListener('load', ()=>{
+  loadRecommendedArticles();
+  loadMbtiSummary();
+});
 </script>
 {% endblock %}

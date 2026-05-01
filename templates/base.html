@@ -6,7 +6,7 @@
 <title>{% block title %}心愈{% endblock %}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Noto+Sans+SC:wght@300;400;500;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Bebas+Neue&family=Noto+Sans+SC:wght@300;400;500;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 {% block extra_head %}{% endblock %}
@@ -26,6 +26,7 @@
     <a href="/soothe" class="mobile-nav-link {% if request.endpoint=='soothe' %}active{% endif %}">💬 AI 陪伴</a>
     <a href="/articles" class="mobile-nav-link {% if request.endpoint in ['articles','article_detail'] %}active{% endif %}">📖 心理科普</a>
     <a href="/community" class="mobile-nav-link {% if request.endpoint=='community' %}active{% endif %}">🤝 互助社区</a>
+    <a href="/mbti" class="mobile-nav-link {% if request.endpoint=='mbti_page' %}active{% endif %}">🧠 MBTI 人格画像</a>
     <a href="/profile" class="mobile-nav-link {% if request.endpoint in ['profile','history'] %}active{% endif %}">👤 个人中心</a>
     <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border);">
       {% if session.get('user_id') %}
@@ -85,6 +86,10 @@
       <a href="/community" class="sidebar-link {% if request.endpoint=='community' %}active{% endif %}">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
         互助社区
+      </a>
+      <a href="/mbti" class="sidebar-link {% if request.endpoint=='mbti_page' %}active{% endif %}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a7 7 0 0 0-7 7c0 1.64.57 3.15 1.52 4.35L5 22l8.65-1.52A6.96 6.96 0 0 0 19 9a7 7 0 0 0-7-7z"/><path d="M9 10h.01"/><path d="M15 10h.01"/><path d="M8 14c1.2 1.1 2.5 1.6 4 1.6s2.8-.5 4-1.6"/></svg>
+        MBTI 人格画像
       </a>
 
       <div class="sidebar-section-label">我的</div>

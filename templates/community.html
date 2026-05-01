@@ -3,13 +3,16 @@
 {% block page_title %}互助社区{% endblock %}
 
 {% block content %}
-<div style="padding:32px 28px 60px;max-width:860px;">
+<div style="padding:28px 24px 56px;max-width:980px;margin:0 auto;">
+  <div class="community-grid" style="display:grid;grid-template-columns:minmax(0,1fr);gap:20px;align-items:start;">
+    <div>
 
   <!-- 页头 -->
   <div class="anim-fade-up" style="margin-bottom:36px;">
     <div class="section-eyebrow">匿名 · 安全 · 温暖</div>
     <h1 class="heading-lg" style="margin-bottom:10px;">互助社区</h1>
-    <p style="font-size:14px;color:var(--text-2);">在这里，你可以分享心情，互相支持</p>
+    <p style="font-size:14px;color:var(--text-2);line-height:1.8;">在这里，你可以分享心情，互相支持。默认匿名展示，请放心表达；优先分享感受与经历，少做标签化评价。若状态持续低落，建议尽快寻求专业支持。</p>
+    <p style="margin-top:8px;font-size:12px;color:var(--text-3);">温馨提示：这里是互助空间，不替代专业诊疗建议。</p>
         </div>
 
   <!-- 发帖框 -->
@@ -48,8 +51,9 @@
 
   <!-- 分页 -->
   <div id="pagination-container" style="display:flex;justify-content:center;align-items:center;gap:6px;margin-top:28px;"></div>
-
-        </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block scripts %}

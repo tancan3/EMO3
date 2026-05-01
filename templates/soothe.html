@@ -136,7 +136,7 @@ const emotionColors = { '平静':'#90a955','低落':'#31572c','焦虑':'#6b6f3a'
 const emotionClasses = { '平静':'emotion-calm','低落':'emotion-low','焦虑':'emotion-anxious','压力大':'emotion-stressed','自责':'emotion-self-blame','愤怒':'emotion-angry' };
 
 // 初始欢迎消息
-appendMessage('ai', '你好。我是心愈。检测结果只是一个数字，如果你现在觉得压力大、委屈或者单纯想发呆，都可以告诉我。我会在这里一直陪着你。');
+appendMessage('ai', {{ (soothe_starter or '你好。我是心愈。检测结果只是一个数字，如果你现在觉得压力大、委屈或者单纯想发呆，都可以告诉我。我会在这里一直陪着你。')|tojson }});
 
 if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;

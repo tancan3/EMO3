@@ -116,7 +116,7 @@
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html{scroll-behavior:smooth}
 body{
-  font-family:'Noto Sans SC',sans-serif;
+  font-family:'Inter','Noto Sans SC',sans-serif;
   color:var(--text-1);
   background:
     radial-gradient(circle at 100% 0, rgba(236,243,158,.34), transparent 28%),
@@ -248,7 +248,34 @@ button{font-family:inherit;cursor:pointer}
 .textarea-field:focus{border-color:var(--border-focus);box-shadow:0 0 0 4px rgba(49,87,44,.08);background:#fff;}
 .form-label{display:block;font-size:12px;font-weight:800;color:var(--text-2);margin-bottom:7px;letter-spacing:.02em;}
 
-/* Badges */
+/* ---- v11 UI micro-tuning (admin-style align) ---- */
+:root{
+  --r-sm:10px;
+  --r-md:12px;
+  --r-lg:16px;
+  --shadow-card:0 4px 6px -1px rgba(0,0,0,0.05),0 2px 4px -1px rgba(0,0,0,0.03);
+  --shadow-md:0 10px 18px rgba(15,23,42,0.08),0 4px 8px rgba(15,23,42,0.04);
+}
+
+.card,.glass-card,.stat-card{
+  border-radius:var(--r-lg);
+  box-shadow:var(--shadow-card);
+}
+.card:hover,.glass-card:hover,.stat-card:hover{box-shadow:var(--shadow-md)}
+
+.input-field,.textarea-field{
+  border-radius:12px;
+  border-color:#dbe3ee;
+}
+.input-field:focus,.textarea-field:focus{
+  box-shadow:0 0 0 4px rgba(79,119,45,.08);
+}
+
+.btn{border-radius:12px;letter-spacing:.02em;text-transform:none;font-weight:700}
+.btn-sm{border-radius:10px}
+
+.topnav{background:rgba(255,255,255,.82)}
+
 .badge{display:inline-flex;align-items:center;gap:4px;padding:6px 12px;border-radius:999px;font-size:11px;font-weight:800;letter-spacing:.04em;}
 .badge-blue{background:var(--c-primary-bg);color:var(--c-primary);}
 .badge-green{background:var(--c-green-bg);color:var(--c-green-d);}

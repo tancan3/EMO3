@@ -286,12 +286,24 @@ function goHistoryPage(page) {
 function renderHistoryChart(records) {
   const ctx = document.getElementById('historyChart').getContext('2d');
   if (histChart) histChart.destroy();
-  const last = records.slice(-10).reverse();
+
+  const toTs = (v) => {
+    const p = extractBeijingParts(v);
+    if (!p) return 0;
+    return new Date(p.year, p.month - 1, p.day, p.hour || 0, p.minute || 0, p.second || 0).getTime();
+  };
+
+  // records 来自 /api/history（默认倒序），这里统一为时间升序后取最近 10 条
+  const latest = (records || [])
+    .slice()
+    .sort((a, b) => toTs(a.created_at) - toTs(b.created_at))
+    .slice(-10);
+
   histChart = new Chart(ctx, {
     type: 'line',
     data: {
-      labels: last.map(r => formatBeijingMonthDay(r.created_at)),
-      datasets: [{ label: 'PHQ-9', data: last.map(r => r.phq_score),
+      labels: latest.map(r => formatBeijingMonthDay(r.created_at)),
+      datasets: [{ label: 'PHQ-9', data: latest.map(r => r.phq_score),
         borderColor: '#4f772d', backgroundColor: 'rgba(79,119,45,0.1)',
         borderWidth: 2, pointRadius: 4, pointBackgroundColor: '#4f772d', tension: 0.4, fill: true }]
     },
